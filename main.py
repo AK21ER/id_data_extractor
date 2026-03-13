@@ -262,31 +262,28 @@ def extract_dates_smart(text, is_dob=True):
         remaining.sort(key=lambda x: x['year'])
         
         if eth_date == "—" and greg_date == "—" and len(remaining) >= 2:
+            # If we have two numeric candidates, the smaller year is Ethiopic
             eth_date = remaining[0]['original']
             greg_date = remaining[-1]['original']
-        elif eth_date == "—" and len(remaining) >= 1:
-            cand = remaining[0]
-            # Comparison logic
-            check_year = 9999
-            if greg_date != "—":
-                gym = re.search(r'\b(19\d{2}|20\d{2})\b', greg_date)
-                check_year = int(gym.group(1)) if gym else 9999
-            
-            if cand['year'] < check_year: eth_date = cand['original']
-            elif greg_date == "—": 
-                if cand['year'] <= (2018 if is_dob else 2026): eth_date = cand['original']
-                else: greg_date = cand['original']
-        elif greg_date == "—" and len(remaining) >= 1:
-            cand = remaining[-1]
-            check_year = 0
-            if eth_date != "—":
-                eym = re.search(r'\b(19\d{2}|20\d{2})\b', eth_date)
-                check_year = int(eym.group(1)) if eym else 0
-            
-            if cand['year'] > check_year: greg_date = cand['original']
-            elif eth_date == "—":
-                if cand['year'] > (2018 if is_dob else 2026): greg_date = cand['original']
-                else: eth_date = cand['original']
+        elif len(remaining) >= 1:
+            # Try to fill whichever is missing
+            for cand in remaining:
+                if eth_date == "—" and (greg_date == "—" or cand['year'] < (int(re.search(r'\d{4}', greg_date).group(0)) if re.search(r'\d{4}', greg_date) else 9999)):
+                    eth_date = cand['original']
+                elif greg_date == "—" and (eth_date == "—" or cand['year'] > (int(re.search(r'\d{4}', eth_date).group(0)) if re.search(r'\d{4}', eth_date) else 0)):
+                    greg_date = cand['original']
+                    
+    # Final cleanup: if they are the same and not markers, one is likely wrong
+    if eth_date == greg_date and eth_date != "—":
+        if not any(m.lower() in eth_date.lower() for m in eng_months) and not any(m in eth_date for m in amh_months):
+            # Numeric only and same, check year
+            y = int(re.search(r'\d{4}', eth_date).group(0))
+            if is_dob:
+                if y <= 2018: greg_date = "—" # Ethiopic candidate
+                else: eth_date = "—" # Gregorian candidate
+            else:
+                if y <= 2026: greg_date = "—"
+                else: eth_date = "—"
             
     return eth_date, greg_date
 
@@ -423,11 +420,12 @@ def extract_front(image, qr_data=None):
         "name": ["name", "full", "ስም", "ሙሉ", "ሙለ", "ሙታ", "ሰም", "ጳም"],
         "dob": ["birth", "date", "የውልድ", "ትውልድ", "ቀን", "የልደት", "birt", "dob"],
         "sex": ["sex", "ፆታ", "ባታ", "ፃታ"],
-        "expiry": ["expiry", "ያሚያበቃበት", "የሚቆይበት", "expir", "expire", "doe"],
+        "expiry": ["expiry", "ያሚያበቃበት", "የሚቆይበት", "የሚያበቃበት", "expir", "expire", "doe"],
+        "issue": ["issue", "የተሰጠበት"],
         "fcn": ["fan", "ካርድ", "ቁጥር", "fcn", "fina", "fin"]
     }
     
-    buckets = {"name": [], "dob": [], "sex": [], "expiry": [], "fcn": []}
+    buckets = {"name": [], "dob": [], "sex": [], "expiry": [], "issue": [], "fcn": []}
     active_key = "name"
     
     for line in lines:
@@ -543,8 +541,8 @@ def extract_front(image, qr_data=None):
             data["name_am"] = "—"
 
     # --- Other Fields ---
-    for key in ["dob", "sex", "expiry", "fcn"]:
-        if buckets[key] or key in ["dob", "expiry"]: # Always attempt dates if key exists
+    for key in ["dob", "sex", "expiry", "issue", "fcn"]:
+        if buckets[key] or key in ["dob", "expiry", "issue"]: # Always attempt dates if key exists
             val_str = " ".join([e['text'] for e in sorted(buckets[key], key=lambda x: x['left'])])
             
             if key == "dob":
@@ -555,6 +553,9 @@ def extract_front(image, qr_data=None):
                 elif any(f in s_low for f in ["ሴት", "female", "f"]): data["sex_am"], data["sex_en"] = "ሴት", "Female"
             elif key == "expiry":
                 data["expiry_eth"], data["expiry_greg"] = extract_dates_smart(val_str, is_dob=False)
+            elif key == "issue":
+                # We extract it to avoid it polluting other fields
+                data["issue_eth"], data["issue_greg"] = extract_dates_smart(val_str, is_dob=False)
             elif key == "fcn":
                 fcn_c = re.sub(r'[^0-9]', '', val_str)
                 if 10 <= len(fcn_c) <= 16:
@@ -569,16 +570,68 @@ def extract_front(image, qr_data=None):
         fan_match = re.search(r'\b(\d{10,16})\b', all_text)
         if fan_match: data["fan"] = fan_match.group(1)
 
-    # 2. Date Fallback (Global search if bucketed search failed)
+    # 2. Date Fallback (Enhanced Global search)
+    found_dates = []
+    date_patterns = [
+        r'\b\d{1,4}[-/.\s]*(?:[A-Za-z]{3,10}|[\u1200-\u137F]{2,10}|\d{1,4})[-/.\s]*\d{1,4}(?:[-/.\s]*\d{2,4})?\b',
+        r'(\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b)'
+    ]
+    
+    # Extract with positions to handle proximity to labels
+    all_found = []
+    for p in date_patterns:
+        for m in re.finditer(p, all_text):
+            d_str = m.group(0).strip().strip("|").strip(" :")
+            if len(d_str) < 6: continue
+            ym = re.search(r'\b(19\d{2}|20\d{2})\b', d_str)
+            if ym:
+                all_found.append({'val': d_str, 'y': int(ym.group(1)), 'pos': m.start()})
+
+    # Sort candidates by appearance
+    all_found.sort(key=lambda x: x['pos'])
+    
+    # Identify label positions
+    label_indices = {}
+    for l_key, l_terms in label_map.items():
+        for term in l_terms:
+            idx = all_text.lower().find(term.lower())
+            if idx != -1:
+                label_indices[l_key] = min(label_indices.get(l_key, 99999), idx)
+
+    def find_near(l_key, min_y, max_y, count=2):
+        if l_key not in label_indices: return []
+        l_pos = label_indices[l_key]
+        # Candidates after the label
+        cands = [f for f in all_found if f['pos'] > l_pos and min_y <= f['y'] <= max_y]
+        # Return the first 'count' candidates found after the label (within a reasonable distance)
+        return sorted(cands[:count], key=lambda x: x['y'])
+
+    # Assign DOB
     if data["dob_eth"] == "—" or data["dob_greg"] == "—":
-        ge_eth, ge_greg = extract_dates_smart(all_text, is_dob=True)
-        if data["dob_eth"] == "—": data["dob_eth"] = ge_eth
-        if data["dob_greg"] == "—": data["dob_greg"] = ge_greg
-        
+        near_dob = find_near("dob", 1930, 2025)
+        if len(near_dob) >= 2:
+            data["dob_eth"], data["dob_greg"] = near_dob[0]['val'], near_dob[1]['val']
+        elif len(near_dob) == 1:
+            if near_dob[0]['y'] <= 2018: data["dob_eth"] = near_dob[0]['val']
+            else: data["dob_greg"] = near_dob[0]['val']
+
+    # Assign Expiry
     if data["expiry_eth"] == "—" or data.get("expiry_greg", "—") == "—":
-        ge_eth, ge_greg = extract_dates_smart(all_text, is_dob=False)
-        if data["expiry_eth"] == "—": data["expiry_eth"] = ge_eth
-        if data.get("expiry_greg", "—") == "—": data["expiry_greg"] = ge_greg
+        near_exp = find_near("expiry", 2016, 2045)
+        if len(near_exp) >= 2:
+            data["expiry_eth"], data["expiry_greg"] = near_exp[0]['val'], near_exp[1]['val']
+        elif len(near_exp) == 1:
+            if near_exp[0]['y'] <= 2029: data["expiry_eth"] = near_exp[0]['val']
+            else: data["expiry_greg"] = near_exp[0]['val']
+
+    # 3. Specific fix for numeric OCR "2026/ Mar/ 12 2026"
+    for k in ["dob_eth", "dob_greg", "expiry_eth", "expiry_greg"]:
+        v = data.get(k, "—")
+        if v != "—":
+            # Remove redundant year repeats like "2026 ... 2026"
+            parts = v.split()
+            if len(parts) > 1 and parts[0] == parts[-1] and len(parts[0]) == 4:
+                data[k] = " ".join(parts[:-1])
 
     # 6. QR OVERRIDES
     if qr_data:

@@ -778,8 +778,7 @@
           <div class="field">
             <span class="label">የሚቆይበት ቀን | Date of Expiry</span>
             <div class="val-expiry">
-              {{ card.data.expiry_greg }}{% if card.data.expiry_greg and card.data.expiry_eth %} | {% endif %}{{
-              card.data.expiry_eth }}
+              {{ card.data.expiry_eth or '—' }} | {{ card.data.expiry_greg or '—' }}
             </div>
           </div>
         </div>
