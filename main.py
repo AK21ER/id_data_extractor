@@ -103,8 +103,18 @@ def parse_qr_data(qr_string):
     data = {}
 
     try:
+        # Fayda QR format can vary; we check indices carefully
         if len(parts) > 2:
             data["name"] = parts[2]
+            # Check if name itself contains Amharic (rare in QR but possible)
+            if any(0x1200 <= ord(c) <= 0x137F for c in parts[2]):
+                data["name_am"] = parts[2]
+        
+        # Some versions have Amharic fields later or in different parts
+        for p in parts:
+            if any(0x1200 <= ord(c) <= 0x137F for c in p) and len(p) > 2:
+                if "name_am" not in data: data["name_am"] = p
+        
         if len(parts) > 6:
             data["sex"] = "Female" if parts[6] == "F" else "Male" if parts[6] == "M" else parts[6]
         if len(parts) > 8:
@@ -137,58 +147,66 @@ def transliterate_to_amharic(text):
     orig_text = text
     text = re.sub(r'[^a-zA-Z\s]', '', text).upper().strip()
     
-    # Specific common name part mappings to make it "perfect"
-    special_mappings = {
-        "HAFIZA": "ሀፊዛ", "ABDULHAMID": "አብዱልሀሚድ", "ABDUL": "አብዱል", "HAMID": "ሀሚድ", 
-        "USMAN": "ኡስማን", "MOHAMMED": "መሐመድ", "AHMED": "አህመድ", "ABEB": "አበባ", 
-        "GENZEB": "ገንዘብ", "TEKLU": "ተክሉ", "TILAHUN": "ጥላሁን",
-        "KEBEDE": "ከበደ", "TESFAYE": "ተስፋዬ", "ALEMU": "አለሙ", "BEKELE": "በቀለ",
-        "ZELEKE": "ዘለቀ", "GIRMA": "ግርማ", "HAILU": "ኃይሉ", "ASSAFA": "አሰፋ",
-        "AMHARA": "አማራ", "OROMIA": "ኦሮሚያ", "SIDAMA": "ሲዳማ", "SOMALI": "ሶማሌ",
-        "TIGRAY": "ትግራይ", "AFAR": "አፋር", "GAMBELA": "ጋምቤላ", "HARARI": "ሐረሪ",
-        "ADDIS ABABA": "አዲስ አበባ", "DIRE DAWA": "ድሬዳዋ", "SHEWA": "ሸዋ",
-        "BALE": "ባሌ", "AGARFA": "አጋርፋ", "JIMMA": "ጅማ", "ADAMA": "አዳማ", "BAHIR DAR": "ባሕር ዳር"
+    # Advanced CV mapping
+    # Consonants (in Sadis - 6th form)
+    cons = {
+        'B': 'ብ', 'C': 'ክ', 'D': 'ድ', 'F': 'ፍ', 'G': 'ግ', 'H': 'ህ', 'J': 'ጅ', 'K': 'ክ', 'L': 'ል', 
+        'M': 'ም', 'N': 'ን', 'P': 'ፕ', 'Q': 'ቅ', 'R': 'ር', 'S': 'ስ', 'T': 'ት', 'V': 'ቭ', 'W': 'ው', 
+        'X': 'ክስ', 'Y': 'ይ', 'Z': 'ዝ', 'CH': 'ች', 'SH': 'ሽ', 'PH': 'ፍ', 'TH': 'ት', 'TS': 'ጽ', 'NY': 'ኝ'
+    }
+    # Vowel transformations (Ge'ez-based)
+    vowels = {
+        'A': 0, 'U': 1, 'I': 2, 'O': 6, 'E': 5
     }
     
-    for eng, amh in special_mappings.items():
-        text = text.replace(eng, amh)
-    
-    mapping = {
-        'CH': 'ቸ', 'SH': 'ሸ', 'PH': 'ፈ', 'TH': 'ተ', 'ZH': 'ዠ', 'KH': 'ኸ', 'TS': 'ጸ', 'NY': 'ኘ',
-        'QU': 'ቁ', 'EE': 'ኢ', 'OO': 'ኡ', 'AY': 'ኤ', 'OW': 'አው', 'AW': 'አው', 'AI': 'አይ',
-        'A': 'አ', 'E': 'እ', 'I': 'ኢ', 'O': 'ኦ', 'U': 'ኡ',
-        'B': 'በ', 'C': 'ከ', 'D': 'ደ', 'F': 'ፈ', 'G': 'ገ', 'H': 'ሀ', 'J': 'ጀ',
-        'K': 'ከ', 'L': 'ለ', 'M': 'መ', 'N': 'ነ', 'P': 'ፐ', 'Q': 'ቀ', 'R': 'ረ',
-        'S': 'ሰ', 'T': 'ተ', 'V': 'ቨ', 'W': 'ወ', 'X': 'ክስ', 'Y': 'የ', 'Z': 'ዘ'
-    }
-    
-    res = ""
-    i = 0
-    words = text.split()
+    # Syllable table (Sadis base + offset)
+    def build_syllable(c_sadis, v_char):
+        if not v_char or v_char not in vowels: return c_sadis
+        base_ord = ord(c_sadis)
+        offset = vowels[v_char]
+        irregulars = {
+            'ሀ': 0, 'ለ': 8, 'ሐ': 16, 'መ': 24, 'ሠ': 32, 'ረ': 40, 'ሰ': 48, 'ሸ': 56, 'ቀ': 64, 
+            'በ': 72, 'ተ': 80, 'ቸ': 88, 'ኀ': 96, 'ነ': 104, 'ኘ': 112, 'አ': 120, 'ከ': 128, 
+            'ኸ': 136, 'ወ': 144, 'ዐ': 152, 'ዘ': 160, 'ዠ': 168, 'የ': 176, 'ደ': 184, 'ጀ': 192, 
+            'ገ': 200, 'ጠ': 208, 'ጨ': 216, 'ጰ': 224, 'ጸ': 232, 'ፀ': 240, 'ፈ': 248, 'ፐ': 256
+        }
+        geez = None
+        for k, v in irregulars.items():
+            if base_ord >= 0x1200 + v and base_ord < 0x1200 + v + 7:
+                geez = chr(0x1200 + v); break
+        if geez:
+            if v_char == 'A': return chr(ord(geez) + 3) # Rabi
+            if v_char == 'E': return geez # Default to Ge'ez
+            if v_char == 'I': return chr(ord(geez) + 2)
+            return chr(ord(geez) + offset)
+        return c_sadis
+
     final_words = []
-    
-    for word in words:
-        if word and ord(word[0]) >= 0x1200 and ord(word[0]) <= 0x137F: # Already Amharic from special_mappings
-            final_words.append(word)
-            continue
-            
-        w_res = ""
-        wi = 0
+    for word in text.split():
+        if not word: continue
+        if any(0x1200 <= ord(c) <= 0x137F for c in word):
+            final_words.append(word); continue
+        w_res = ""; wi = 0
         while wi < len(word):
-            found = False
-            if wi + 1 < len(word):
-                pair = word[wi:wi+2]
-                if pair in mapping:
-                    w_res += mapping[pair]
-                    wi += 2
-                    found = True
-            if not found:
-                char = word[wi]
-                if char in mapping:
-                    w_res += mapping[char]
+            c_part = ""
+            if wi + 1 < len(word) and word[wi:wi+2] in cons:
+                c_part = word[wi:wi+2]; wi += 2
+            elif word[wi] in cons:
+                c_part = word[wi]; wi += 1
+            if c_part:
+                if wi < len(word) and word[wi] in vowels:
+                    w_res += build_syllable(cons[c_part], word[wi]); wi += 1
+                else:
+                    w_res += cons[c_part]
+            else:
+                v = word[wi]
+                if v == 'A': w_res += 'አ'
+                elif v == 'U': w_res += 'ኡ'
+                elif v == 'I': w_res += 'ኢ'
+                elif v == 'O': w_res += 'ኦ'
+                elif v == 'E': w_res += 'እ'
                 wi += 1
         final_words.append(w_res)
-        
     return " ".join(final_words)
 
 def extract_dates_smart(text, is_dob=True):
@@ -538,8 +556,16 @@ def extract_front(image, qr_data=None):
             data["name_en"] = " ".join(u_en[:4])
 
         # Noise rejection for Amharic
-        if data["name_am"] != "—" and any(n in data["name_am"] for n in ["ከህ", "ከህከ", "ርዐ", "፡", "፦", "፥"]):
-            data["name_am"] = "—"
+        # We classify as noise if it has too many symbols or known OCR artifacts
+        if data["name_am"] != "—":
+            noise_chars = ["፡", "፦", "፥", "ርዐ", "ከህ", "ከህከ", "ጩ", "ቺ", "ኚ", "ጯ", "ፚ"]
+            if any(n in data["name_am"] for n in noise_chars):
+                data["name_am"] = "—"
+            # If name contains characters that are almost never in names
+            elif re.search(r'[፠-⠿]', data["name_am"]): # Punctuation/Symbols
+                data["name_am"] = "—"
+            elif len(data["name_am"]) < 3:
+                 data["name_am"] = "—"
 
     # --- Other Fields ---
     for key in ["dob", "sex", "expiry", "issue", "fcn"]:
@@ -667,17 +693,30 @@ def extract_front(image, qr_data=None):
     # 6. QR OVERRIDES
     if qr_data:
         if qr_data.get("name"): data["name_en"] = qr_data["name"]
+        if qr_data.get("name_am"): data["name_am"] = qr_data["name_am"]
         if qr_data.get("dob"): data["dob_greg"] = qr_data["dob"]
         if qr_data.get("sex"):
             data["sex_en"] = qr_data["sex"]
             data["sex_am"] = "ወንድ" if qr_data["sex"] == "Male" else "ሴት"
         if qr_data.get("fin"): data["id_number"] = qr_data["fin"]
 
-    # 7. FINAL NAME TRANSLITERATION (After all overrides)
-    if data["name_en"] != "—" and len(data["name_en"]) > 3:
-        # Transliterate to ensure high-quality Amharic name
-        data["name_am"] = transliterate_to_amharic(data["name_en"])
-
+    # 7. FINAL NAME TRANSLITERATION (Smart Fallback)
+    if data["name_en"] != "—":
+        trans_am = transliterate_to_amharic(data["name_en"])
+        
+        # If Amharic is missing, use transliteration
+        if data["name_am"] == "—" or len(data["name_am"]) < 3:
+            data["name_am"] = trans_am
+        else:
+            # If we have both, compare them. 
+            # If OCR is completely different length than English words, it might be noise
+            en_word_count = len(data["name_en"].split())
+            am_word_count = len(data["name_am"].split())
+            if abs(en_word_count - am_word_count) > 1:
+                data["name_am"] = trans_am
+            # Otherwise, we keep the OCR as requested ("exact as image")
+            # unless the OCR has suspicious characters
+    
     return data
 
 
