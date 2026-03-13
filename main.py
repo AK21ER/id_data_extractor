@@ -143,7 +143,10 @@ def transliterate_to_amharic(text):
         "USMAN": "ኡስማን", "MOHAMMED": "መሐመድ", "AHMED": "አህመድ", "ABEB": "አበባ", 
         "GENZEB": "ገንዘብ", "TEKLU": "ተክሉ", "TILAHUN": "ጥላሁን",
         "KEBEDE": "ከበደ", "TESFAYE": "ተስፋዬ", "ALEMU": "አለሙ", "BEKELE": "በቀለ",
-        "ZELEKE": "ዘለቀ", "GIRMA": "ግርማ", "HAILU": "ኃይሉ", "ASSAFA": "አሰፋ"
+        "ZELEKE": "ዘለቀ", "GIRMA": "ግርማ", "HAILU": "ኃይሉ", "ASSAFA": "አሰፋ",
+        "AMHARA": "አማራ", "OROMIA": "ኦሮሚያ", "SIDAMA": "ሲዳማ", "SOMALI": "ሶማሌ",
+        "TIGRAY": "ትግራይ", "AFAR": "አፋር", "GAMBELA": "ጋምቤላ", "HARARI": "ሐረሪ",
+        "ADDIS ABABA": "አዲስ አበባ", "DIRE DAWA": "ድሬዳዋ", "SHEWA": "ሸዋ"
     }
     
     for eng, amh in special_mappings.items():
@@ -808,13 +811,26 @@ def extract_back(image):
     if not en_parts_map["zone"] and en_list: en_parts_map["zone"] = en_list.pop(0)
     if not en_parts_map["woreda"] and en_list: en_parts_map["woreda"] = en_list.pop(0)
 
-    data["reg_am"] = am_parts_map["reg"] or "—"
-    data["zone_am"] = am_parts_map["zone"] or "—"
-    data["woreda_am"] = am_parts_map["woreda"] or "—"
-
     data["reg_en"] = en_parts_map["reg"] or "—"
     data["zone_en"] = en_parts_map["zone"] or "—"
     data["woreda_en"] = en_parts_map["woreda"] or "—"
+
+    # 3. Final Address Transliteration (Syncing)
+    # If English exists, we transliterate to Amharic for consistency and to fix OCR noise
+    if data["reg_en"] != "—":
+        data["reg_am"] = transliterate_to_amharic(data["reg_en"])
+    elif data["reg_am"] == "—":
+        data["reg_am"] = "—"
+
+    if data["zone_en"] != "—":
+        data["zone_am"] = transliterate_to_amharic(data["zone_en"])
+    elif data["zone_am"] == "—":
+        data["zone_am"] = "—"
+
+    if data["woreda_en"] != "—":
+        data["woreda_am"] = transliterate_to_amharic(data["woreda_en"])
+    elif data["woreda_am"] == "—":
+        data["woreda_am"] = "—"
 
     return data
 
