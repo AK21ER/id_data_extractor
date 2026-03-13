@@ -146,7 +146,8 @@ def transliterate_to_amharic(text):
         "ZELEKE": "ዘለቀ", "GIRMA": "ግርማ", "HAILU": "ኃይሉ", "ASSAFA": "አሰፋ",
         "AMHARA": "አማራ", "OROMIA": "ኦሮሚያ", "SIDAMA": "ሲዳማ", "SOMALI": "ሶማሌ",
         "TIGRAY": "ትግራይ", "AFAR": "አፋር", "GAMBELA": "ጋምቤላ", "HARARI": "ሐረሪ",
-        "ADDIS ABABA": "አዲስ አበባ", "DIRE DAWA": "ድሬዳዋ", "SHEWA": "ሸዋ"
+        "ADDIS ABABA": "አዲስ አበባ", "DIRE DAWA": "ድሬዳዋ", "SHEWA": "ሸዋ",
+        "BALE": "ባሌ", "AGARFA": "አጋርፋ", "JIMMA": "ጅማ", "ADAMA": "አዳማ", "BAHIR DAR": "ባሕር ዳር"
     }
     
     for eng, amh in special_mappings.items():
