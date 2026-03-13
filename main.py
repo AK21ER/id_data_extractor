@@ -141,6 +141,7 @@ def transliterate_to_amharic(text):
     special_mappings = {
         "HAFIZA": "ሀፊዛ", "ABDULHAMID": "አብዱልሀሚድ", "ABDUL": "አብዱል", "HAMID": "ሀሚድ", 
         "USMAN": "ኡስማን", "MOHAMMED": "መሐመድ", "AHMED": "አህመድ", "ABEB": "አበባ", 
+        "GENZEB": "ገንዘብ", "TEKLU": "ተክሉ", "TILAHUN": "ጥላሁን",
         "KEBEDE": "ከበደ", "TESFAYE": "ተስፋዬ", "ALEMU": "አለሙ", "BEKELE": "በቀለ",
         "ZELEKE": "ዘለቀ", "GIRMA": "ግርማ", "HAILU": "ኃይሉ", "ASSAFA": "አሰፋ"
     }
@@ -532,12 +533,8 @@ def extract_front(image, qr_data=None):
                         u_en.append(w); seen.add(w.lower())
             data["name_en"] = " ".join(u_en[:4])
 
-        # PRIORITIZE TRANSLITERATION IF ENGLISH NAME IS FOUND
-        if data["name_en"] != "—" and len(data["name_en"]) > 5:
-            # If Amharic OCR found something decent, we can keep it, 
-            # but usually transliteration is more consistent as per user request.
-            data["name_am"] = transliterate_to_amharic(data["name_en"])
-        elif data["name_am"] != "—" and any(n in data["name_am"] for n in ["ከህ", "ከህከ", "ርዐ", "፡", "፦", "፥"]):
+        # Noise rejection for Amharic
+        if data["name_am"] != "—" and any(n in data["name_am"] for n in ["ከህ", "ከህከ", "ርዐ", "፡", "፦", "፥"]):
             data["name_am"] = "—"
 
     # --- Other Fields ---
@@ -570,14 +567,34 @@ def extract_front(image, qr_data=None):
         fan_match = re.search(r'\b(\d{10,16})\b', all_text)
         if fan_match: data["fan"] = fan_match.group(1)
 
-    # 2. Date Fallback (Enhanced Global search)
+    # 2. Date Fallback (Geometric Proximity Search)
     found_dates = []
+    # Combined patterns
     date_patterns = [
         r'\b\d{1,4}[-/.\s]*(?:[A-Za-z]{3,10}|[\u1200-\u137F]{2,10}|\d{1,4})[-/.\s]*\d{1,4}(?:[-/.\s]*\d{2,4})?\b',
         r'(\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b)'
     ]
     
-    # Extract with positions to handle proximity to labels
+    # Extract with geometric positions
+    all_cands = []
+    for p in date_patterns:
+        # We need the original OCR coordinates, so we'll look for strings that match patterns in groups
+        # However, for global fallback, it's easier to just find all tokens that look like dates 
+        # and use their original OCR indices.
+        pass
+
+    # Better approach: Iterate over OCR tokens and find those that contribute to a date
+    char_to_y = {}
+    curr_cursor = 0
+    for i in range(len(ocr_data['text'])):
+        t = ocr_data['text'][i]
+        for _ in range(len(t)):
+            char_to_y[curr_cursor] = ocr_data['top'][i]
+            curr_cursor += 1
+        # Space added by " ".join()
+        char_to_y[curr_cursor] = ocr_data['top'][i]
+        curr_cursor += 1
+
     all_found = []
     for p in date_patterns:
         for m in re.finditer(p, all_text):
@@ -585,44 +602,54 @@ def extract_front(image, qr_data=None):
             if len(d_str) < 6: continue
             ym = re.search(r'\b(19\d{2}|20\d{2})\b', d_str)
             if ym:
-                all_found.append({'val': d_str, 'y': int(ym.group(1)), 'pos': m.start()})
+                y_coord = char_to_y.get(m.start(), 0)
+                all_found.append({'val': d_str, 'y_year': int(ym.group(1)), 'y_coord': y_coord})
 
-    # Sort candidates by appearance
-    all_found.sort(key=lambda x: x['pos'])
-    
-    # Identify label positions
-    label_indices = {}
+    # Identify label Y-coordinates
+    label_y = {}
     for l_key, l_terms in label_map.items():
-        for term in l_terms:
-            idx = all_text.lower().find(term.lower())
-            if idx != -1:
-                label_indices[l_key] = min(label_indices.get(l_key, 99999), idx)
+        for i in range(len(ocr_data['text'])):
+            t = ocr_data['text'][i].strip().lower()
+            if any(term in t for term in l_terms):
+                label_y[l_key] = ocr_data['top'][i]
+                break
 
-    def find_near(l_key, min_y, max_y, count=2):
-        if l_key not in label_indices: return []
-        l_pos = label_indices[l_key]
-        # Candidates after the label
-        cands = [f for f in all_found if f['pos'] > l_pos and min_y <= f['y'] <= max_y]
-        # Return the first 'count' candidates found after the label (within a reasonable distance)
-        return sorted(cands[:count], key=lambda x: x['y'])
+    def get_best_pair(l_key, min_year, max_year):
+        if l_key not in label_y: return "—", "—"
+        target_y = label_y[l_key]
+        # Broader range for vertical screenshots
+        matches = [f for f in all_found if target_y - 50 <= f['y_coord'] <= target_y + 180]
+        matches = [f for f in matches if min_year <= f['y_year'] <= max_year]
+        
+        if not matches: return "—", "—"
+        
+        # Sort by distance to label Y
+        matches.sort(key=lambda x: abs(x['y_coord'] - target_y))
+        
+        # Take the top ones that are on similar Y-levels (horizontal pairs)
+        closest_y = matches[0]['y_coord']
+        pair = [f for f in matches if abs(f['y_coord'] - closest_y) < 40]
+        
+        # Sort indices by year to distinguish Ethiopic / Gregorian
+        pair.sort(key=lambda x: x['y_year'])
+        
+        if len(pair) >= 2:
+            return pair[0]['val'], pair[-1]['val']
+        elif len(pair) == 1:
+            if pair[0]['y_year'] <= (2018 if l_key == "dob" else 2027): return pair[0]['val'], "—"
+            else: return "—", pair[0]['val']
+        return "—", "—"
 
-    # Assign DOB
+    # Re-assign using proximity
     if data["dob_eth"] == "—" or data["dob_greg"] == "—":
-        near_dob = find_near("dob", 1930, 2025)
-        if len(near_dob) >= 2:
-            data["dob_eth"], data["dob_greg"] = near_dob[0]['val'], near_dob[1]['val']
-        elif len(near_dob) == 1:
-            if near_dob[0]['y'] <= 2018: data["dob_eth"] = near_dob[0]['val']
-            else: data["dob_greg"] = near_dob[0]['val']
+        d_eth, d_greg = get_best_pair("dob", 1930, 2025)
+        if data["dob_eth"] == "—": data["dob_eth"] = d_eth
+        if data["dob_greg"] == "—": data["dob_greg"] = d_greg
 
-    # Assign Expiry
     if data["expiry_eth"] == "—" or data.get("expiry_greg", "—") == "—":
-        near_exp = find_near("expiry", 2016, 2045)
-        if len(near_exp) >= 2:
-            data["expiry_eth"], data["expiry_greg"] = near_exp[0]['val'], near_exp[1]['val']
-        elif len(near_exp) == 1:
-            if near_exp[0]['y'] <= 2029: data["expiry_eth"] = near_exp[0]['val']
-            else: data["expiry_greg"] = near_exp[0]['val']
+        e_eth, e_greg = get_best_pair("expiry", 2016, 2045)
+        if data["expiry_eth"] == "—": data["expiry_eth"] = e_eth
+        if data.get("expiry_greg", "—") == "—": data["expiry_greg"] = e_greg
 
     # 3. Specific fix for numeric OCR "2026/ Mar/ 12 2026"
     for k in ["dob_eth", "dob_greg", "expiry_eth", "expiry_greg"]:
@@ -641,6 +668,11 @@ def extract_front(image, qr_data=None):
             data["sex_en"] = qr_data["sex"]
             data["sex_am"] = "ወንድ" if qr_data["sex"] == "Male" else "ሴት"
         if qr_data.get("fin"): data["id_number"] = qr_data["fin"]
+
+    # 7. FINAL NAME TRANSLITERATION (After all overrides)
+    if data["name_en"] != "—" and len(data["name_en"]) > 3:
+        # Transliterate to ensure high-quality Amharic name
+        data["name_am"] = transliterate_to_amharic(data["name_en"])
 
     return data
 
