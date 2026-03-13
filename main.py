@@ -229,52 +229,62 @@ def extract_dates_smart(text, is_dob=True):
             'is_amh': is_amh_marker
         })
     
+    # --- GLOBAL FALLBACK FOR NUMERIC DATES ---
+    # If we missed numeric pairs like 2026/07/01 | 2034/Mar/10
+    numeric_pattern = r'(\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b)'
+    num_candidates = re.findall(numeric_pattern, text)
+    
+    for nc in num_candidates:
+        if any(nc == p['original'] for p in processed): continue
+        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', nc)
+        if year_match:
+            year = int(year_match.group(1))
+            if min_y <= year <= max_y:
+                processed.append({
+                    'original': nc,
+                    'year': year,
+                    'is_greg': False, # Default to False, will compare later
+                    'is_amh': False
+                })
+
     eth_date, greg_date = "—", "—"
     
     if len(processed) >= 1:
         # Separate by explicit markers first
         gregs = [p for p in processed if p['is_greg']]
         amhs = [p for p in processed if p['is_amh']]
-        nums = [p for p in processed if not p['is_greg'] and not p['is_amh']]
         
         if gregs: greg_date = gregs[0]['original']
         if amhs: eth_date = amhs[0]['original']
         
-        # If still missing, use numeric candidates and year comparison
-        # Ethiopic year is always smaller than Gregorian counterpart (7-8 year difference)
+        # Numeric comparison for the rest
         remaining = [p for p in processed if p['original'] not in [eth_date, greg_date]]
         remaining.sort(key=lambda x: x['year'])
         
         if eth_date == "—" and greg_date == "—" and len(remaining) >= 2:
-            # If we have two numeric candidates, the smaller year is Ethiopic
             eth_date = remaining[0]['original']
             greg_date = remaining[-1]['original']
         elif eth_date == "—" and len(remaining) >= 1:
-            # If we already have a Gregorian via marker, the remaining is Ethiopic if smaller
             cand = remaining[0]
+            # Comparison logic
+            check_year = 9999
             if greg_date != "—":
-                g_year_match = re.search(r'\b(19\d{2}|20\d{2})\b', greg_date)
-                g_year = int(g_year_match.group(1)) if g_year_match else 9999
-                if cand['year'] < g_year:
-                    eth_date = cand['original']
-                else:
-                    # If this one is bigger than the existing Greg, it's a newer Greg? 
-                    # Usually IDs don't have two Gregorian birth dates.
-                    pass
-            else:
-                # Guess by range
+                gym = re.search(r'\b(19\d{2}|20\d{2})\b', greg_date)
+                check_year = int(gym.group(1)) if gym else 9999
+            
+            if cand['year'] < check_year: eth_date = cand['original']
+            elif greg_date == "—": 
                 if cand['year'] <= (2018 if is_dob else 2026): eth_date = cand['original']
                 else: greg_date = cand['original']
         elif greg_date == "—" and len(remaining) >= 1:
-            # If we already have an Ethiopic via marker, the remaining is Gregorian if bigger
             cand = remaining[-1]
+            check_year = 0
             if eth_date != "—":
-                e_year_match = re.search(r'\b(19\d{2}|20\d{2})\b', eth_date)
-                e_year = int(e_year_match.group(1)) if e_year_match else 0
-                if cand['year'] > e_year:
-                    greg_date = cand['original']
-            else:
-                # Guess by range
+                eym = re.search(r'\b(19\d{2}|20\d{2})\b', eth_date)
+                check_year = int(eym.group(1)) if eym else 0
+            
+            if cand['year'] > check_year: greg_date = cand['original']
+            elif eth_date == "—":
                 if cand['year'] > (2018 if is_dob else 2026): greg_date = cand['original']
                 else: eth_date = cand['original']
             
