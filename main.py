@@ -120,6 +120,166 @@ def parse_qr_data(qr_string):
 # -----------------------------
 # 5. QR CODE READER
 # -----------------------------
+# -----------------------------
+# 5.5 TRANSLITERATE ENGLISH TO AMHARIC
+# -----------------------------
+# -----------------------------
+# 5.5 TRANSLITERATE ENGLISH TO AMHARIC
+# -----------------------------
+def transliterate_to_amharic(text):
+    """
+    Phonetic transliteration from English to Amharic.
+    Used for name fields when Amharic OCR fails.
+    """
+    if not text or text == "—": return "—"
+    
+    # Sanitize: remove non-alpha (except spaces) for mapping
+    orig_text = text
+    text = re.sub(r'[^a-zA-Z\s]', '', text).upper().strip()
+    
+    # Specific common name part mappings to make it "perfect"
+    special_mappings = {
+        "HAFIZA": "ሀፊዛ", "ABDULHAMID": "አብዱልሀሚድ", "ABDUL": "አብዱል", "HAMID": "ሀሚድ", 
+        "USMAN": "ኡስማን", "MOHAMMED": "መሐመድ", "AHMED": "አህመድ", "ABEB": "አበባ", 
+        "KEBEDE": "ከበደ", "TESFAYE": "ተስፋዬ", "ALEMU": "አለሙ", "BEKELE": "በቀለ",
+        "ZELEKE": "ዘለቀ", "GIRMA": "ግርማ", "HAILU": "ኃይሉ", "ASSAFA": "አሰፋ"
+    }
+    
+    for eng, amh in special_mappings.items():
+        text = text.replace(eng, amh)
+    
+    mapping = {
+        'CH': 'ቸ', 'SH': 'ሸ', 'PH': 'ፈ', 'TH': 'ተ', 'ZH': 'ዠ', 'KH': 'ኸ', 'TS': 'ጸ', 'NY': 'ኘ',
+        'QU': 'ቁ', 'EE': 'ኢ', 'OO': 'ኡ', 'AY': 'ኤ', 'OW': 'አው', 'AW': 'አው', 'AI': 'አይ',
+        'A': 'አ', 'E': 'እ', 'I': 'ኢ', 'O': 'ኦ', 'U': 'ኡ',
+        'B': 'በ', 'C': 'ከ', 'D': 'ደ', 'F': 'ፈ', 'G': 'ገ', 'H': 'ሀ', 'J': 'ጀ',
+        'K': 'ከ', 'L': 'ለ', 'M': 'መ', 'N': 'ነ', 'P': 'ፐ', 'Q': 'ቀ', 'R': 'ረ',
+        'S': 'ሰ', 'T': 'ተ', 'V': 'ቨ', 'W': 'ወ', 'X': 'ክስ', 'Y': 'የ', 'Z': 'ዘ'
+    }
+    
+    res = ""
+    i = 0
+    words = text.split()
+    final_words = []
+    
+    for word in words:
+        if word and ord(word[0]) >= 0x1200 and ord(word[0]) <= 0x137F: # Already Amharic from special_mappings
+            final_words.append(word)
+            continue
+            
+        w_res = ""
+        wi = 0
+        while wi < len(word):
+            found = False
+            if wi + 1 < len(word):
+                pair = word[wi:wi+2]
+                if pair in mapping:
+                    w_res += mapping[pair]
+                    wi += 2
+                    found = True
+            if not found:
+                char = word[wi]
+                if char in mapping:
+                    w_res += mapping[char]
+                wi += 1
+        final_words.append(w_res)
+        
+    return " ".join(final_words)
+
+def extract_dates_smart(text, is_dob=True):
+    """
+    Robustly extracts Ethiopic and Gregorian dates from text.
+    Uses year ranges and script markers to distinguish between calendars.
+    """
+    if not text or len(text) < 5: return "—", "—"
+    
+    amh_months = ["መስከረም", "ጥቅምት", "ኅዳር", "ታኅሣሥ", "ጥር", "የካቲት", "መጋቢት", "ሚያዝያ", "ግንቦት", "ሰኔ", "ሐምሌ", "ነሐሴ", "ጳጉሜን"]
+    eng_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                  "January", "February", "March", "April", "June", "July", "August", "September", "October", "November", "December"]
+    
+    # Improved regex to handle various delimiters and month names
+    # Specifically tightened to catch DD/MM/YYYY and YYYY/MM/DD variations
+    pattern = r'(\d{1,4}[-/.\s]*(?:[A-Za-z]{3,10}|[\u1200-\u137F]{2,10}|\d{1,4})[-/.\s]*\d{1,4}(?:[-/.\s]*\d{2,4})?)'
+    
+    candidates = re.findall(pattern, text)
+    processed = []
+    
+    # Filter for realistic years
+    # DOB: 1940-2025, Expiry: 2024-2045
+    min_y = 1930 if is_dob else 2015
+    max_y = 2025 if is_dob else 2045
+    
+    for cand in candidates:
+        cand_clean = cand.strip().strip("|").strip(" :")
+        if not cand_clean or len(cand_clean) < 6: continue
+        
+        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', cand_clean)
+        if not year_match: continue
+        
+        year = int(year_match.group(1))
+        if not (min_y <= year <= max_y): continue
+            
+        is_greg_marker = any(m.lower() in cand_clean.lower() for m in eng_months)
+        is_amh_marker = any(m in cand_clean for m in amh_months)
+        
+        processed.append({
+            'original': cand_clean,
+            'year': year,
+            'is_greg': is_greg_marker,
+            'is_amh': is_amh_marker
+        })
+    
+    eth_date, greg_date = "—", "—"
+    
+    if len(processed) >= 1:
+        # Separate by explicit markers first
+        gregs = [p for p in processed if p['is_greg']]
+        amhs = [p for p in processed if p['is_amh']]
+        nums = [p for p in processed if not p['is_greg'] and not p['is_amh']]
+        
+        if gregs: greg_date = gregs[0]['original']
+        if amhs: eth_date = amhs[0]['original']
+        
+        # If still missing, use numeric candidates and year comparison
+        # Ethiopic year is always smaller than Gregorian counterpart (7-8 year difference)
+        remaining = [p for p in processed if p['original'] not in [eth_date, greg_date]]
+        remaining.sort(key=lambda x: x['year'])
+        
+        if eth_date == "—" and greg_date == "—" and len(remaining) >= 2:
+            # If we have two numeric candidates, the smaller year is Ethiopic
+            eth_date = remaining[0]['original']
+            greg_date = remaining[-1]['original']
+        elif eth_date == "—" and len(remaining) >= 1:
+            # If we already have a Gregorian via marker, the remaining is Ethiopic if smaller
+            cand = remaining[0]
+            if greg_date != "—":
+                g_year_match = re.search(r'\b(19\d{2}|20\d{2})\b', greg_date)
+                g_year = int(g_year_match.group(1)) if g_year_match else 9999
+                if cand['year'] < g_year:
+                    eth_date = cand['original']
+                else:
+                    # If this one is bigger than the existing Greg, it's a newer Greg? 
+                    # Usually IDs don't have two Gregorian birth dates.
+                    pass
+            else:
+                # Guess by range
+                if cand['year'] <= (2018 if is_dob else 2026): eth_date = cand['original']
+                else: greg_date = cand['original']
+        elif greg_date == "—" and len(remaining) >= 1:
+            # If we already have an Ethiopic via marker, the remaining is Gregorian if bigger
+            cand = remaining[-1]
+            if eth_date != "—":
+                e_year_match = re.search(r'\b(19\d{2}|20\d{2})\b', eth_date)
+                e_year = int(e_year_match.group(1)) if e_year_match else 0
+                if cand['year'] > e_year:
+                    greg_date = cand['original']
+            else:
+                # Guess by range
+                if cand['year'] > (2018 if is_dob else 2026): greg_date = cand['original']
+                else: eth_date = cand['original']
+            
+    return eth_date, greg_date
+
 def read_qr(image):
 
     qr_codes = decode(image)
@@ -174,7 +334,13 @@ def extract_front(image, qr_data=None):
     Extracts data from the front of the ID card.
     Uses a dynamic layout-aware approach to handle varied positions and phone screenshots.
     """
-    data = {"name_am": "—", "name_en": "—", "dob_eth": "—", "dob_greg": "—", "sex_am": "—", "sex_en": "—", "id_number": "—"}
+    data = {
+        "name_am": "—", "name_en": "—", 
+        "dob_eth": "—", "dob_greg": "—", 
+        "sex_am": "—", "sex_en": "—", 
+        "id_number": "—", "fan": "—", 
+        "barcode_data": "—"
+    }
 
     # 1. PREPARE FULL IMAGE
     # -----------------------------
@@ -185,6 +351,15 @@ def extract_front(image, qr_data=None):
     
     # First pass: find anchors on the high-quality preprocessed image
     ocr_data = pytesseract.image_to_data(proc_full, lang="eng+amh", output_type=pytesseract.Output.DICT)
+
+    # 1.5 BARCODE DETECTION (Front)
+    # -----------------------------
+    barcodes = decode(image)
+    if barcodes:
+        data["barcode_data"] = barcodes[0].data.decode('utf-8')
+        # If barcode data looks like a FIN/FAN, use it as fallback
+        if len(data["barcode_data"]) > 8:
+            data["id_number"] = data["barcode_data"]
     
     # 2. FIND LAYOUT ANCHORS
     # -----------------------------
@@ -236,9 +411,9 @@ def extract_front(image, qr_data=None):
     # -----------------------------
     label_map = {
         "name": ["name", "full", "ስም", "ሙሉ", "ሙለ", "ሙታ", "ሰም", "ጳም"],
-        "dob": ["birth", "date", "የውልድ", "ትውልድ", "ቀን", "የልደት", "birt"], # Added variations
+        "dob": ["birth", "date", "የውልድ", "ትውልድ", "ቀን", "የልደት", "birt", "dob"],
         "sex": ["sex", "ፆታ", "ባታ", "ፃታ"],
-        "expiry": ["expiry", "ያሚያበቃበት", "የሚቆይበት", "expir"],
+        "expiry": ["expiry", "ያሚያበቃበት", "የሚቆይበት", "expir", "expire", "doe"],
         "fcn": ["fan", "ካርድ", "ቁጥር", "fcn", "fina", "fin"]
     }
     
@@ -290,35 +465,39 @@ def extract_front(image, qr_data=None):
             l_left = min(w['left'] for w in nl) - 15
             l_right = max(w['left'] for w in nl) + 400
             
-            y1, y2 = max(0, l_top - 10), min(h_proc, l_bot)
+            # Expand ROI upwards to catch Amharic if it's slightly higher than English
+            y1, y2 = max(0, l_top - 60), min(h_proc, l_bot + 20)
             x1, x2 = max(0, l_left), min(w_proc, l_right)
             if (y2-y1) < 20 or (x2-x1) < 40: continue
             
             roi_g = proc_full[y1:y2, x1:x2]
-            # Triple scale for better Amharic OCR (relative to proc_full)
+            # Multiple thresholding styles for better noise rejection
             roi_z = cv2.resize(roi_g, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            # Adaptive threshold for thin Amharic lines
-            roi_t = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
+            th1 = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
+            # Second threshold for thick/darker text
+            _, th2 = cv2.threshold(roi_z, 140, 255, cv2.THRESH_BINARY)
             
-            am_n = pytesseract.image_to_string(roi_t, lang="amh", config='--psm 7').strip()
+            # Use multi-pass OCR on the same ROI
+            pass1 = pytesseract.image_to_string(th1, lang="amh", config='--psm 6').strip()
+            pass2 = pytesseract.image_to_string(th2, lang="amh", config='--psm 6').strip()
+            am_n = pass1 + " " + pass2
+            
             en_n = pytesseract.image_to_string(roi_z, lang="eng", config='--psm 7').strip()
             
-            # Clean Amharic
+            # Clean Amharic (Reject words with > 30% non-Amharic characters)
+            def is_legit_amh(w):
+                if len(w) < 2 or len(w) > 13: return False
+                amh_chars = sum(1 for c in w if 0x1200 <= ord(c) <= 0x137F)
+                if amh_chars / len(w) < 0.7: return False
+                # Nonsense repetitions
+                if sum(1 for i in range(len(w)-2) if w[i] == w[i+1] == w[i+2]) > 0: return False
+                return True
+
             am_c = re.sub(r'[a-zA-Z0-9\(\)\{\}\[\]\.\,\|\!\?\-\_\/\\\»]', ' ', am_n)
-            # Remove Ethiopic numerals as well
             am_c = re.sub(r'[\u1369-\u1371]', ' ', am_c) 
-            am_words = [w for w in am_c.replace("፣", " ").replace("።", " ").split() if len(w) > 1]
+            am_words = [w for w in am_c.replace("፣", " ").replace("።", " ").split() if is_legit_amh(w)]
             
-            cleaned_am = []
-            for w in am_words:
-                if len(w) > 12: continue
-                # Repetition check (loose)
-                reps = sum(1 for i in range(len(w)-2) if w[i] == w[i+1] == w[i+2])
-                if reps > 1: continue
-                if any(lbl in w for lbl in ["ስም", "ሙሉ", "ካርድ"]): continue
-                cleaned_am.append(w)
-            
-            if cleaned_am: am_parts.append(" ".join(cleaned_am))
+            if am_words: am_parts.append(" ".join(am_words))
             
             # Clean English
             en_words = [w for w in en_n.split() if int(len(re.findall(r'[a-z]', w.lower()))) > 1]
@@ -331,7 +510,8 @@ def extract_front(image, qr_data=None):
             for p in am_parts:
                 for w in p.split():
                     if w not in seen:
-                        if not any(noise in w for noise in ["ርዐ", "ቦዩህ", "ነሃ", "ልከ"]):
+                        # Stricter noise rejection
+                        if not any(noise in w for noise in ["ርዐ", "ቦዩህ", "ነሃ", "ልከ", "ከህ", "ከህከ"]):
                             u_am.append(w); seen.add(w)
             data["name_am"] = " ".join(u_am[:4])
         
@@ -344,47 +524,51 @@ def extract_front(image, qr_data=None):
                         u_en.append(w); seen.add(w.lower())
             data["name_en"] = " ".join(u_en[:4])
 
+        # PRIORITIZE TRANSLITERATION IF ENGLISH NAME IS FOUND
+        if data["name_en"] != "—" and len(data["name_en"]) > 5:
+            # If Amharic OCR found something decent, we can keep it, 
+            # but usually transliteration is more consistent as per user request.
+            data["name_am"] = transliterate_to_amharic(data["name_en"])
+        elif data["name_am"] != "—" and any(n in data["name_am"] for n in ["ከህ", "ከህከ", "ርዐ", "፡", "፦", "፥"]):
+            data["name_am"] = "—"
+
     # --- Other Fields ---
     for key in ["dob", "sex", "expiry", "fcn"]:
-        if buckets[key]:
+        if buckets[key] or key in ["dob", "expiry"]: # Always attempt dates if key exists
             val_str = " ".join([e['text'] for e in sorted(buckets[key], key=lambda x: x['left'])])
+            
             if key == "dob":
-                dob_c = re.sub(r'[^0-9/a-zA-Z]', ' ', val_str)
-                # Find conventional dates
-                dates = re.findall(r'(\d{2,4}/\d{2}/\d{2,4})', dob_c)
-                greg_pats = re.findall(r'(\d{4}/?[A-Za-z]{3}/?\d{2})', dob_c)
-                
-                if dates:
-                    # Heuristic: if first date is > 2000 and the structure is YYYY/MM/DD, it might be Gregorian
-                    # on some cards Ethiopic comes first. 
-                    # If second date exists, we can be more sure.
-                    if len(dates) > 1:
-                        data["dob_eth"], data["dob_greg"] = dates[0], dates[1]
-                    else:
-                        # detect which one it is
-                        if int(dates[0].split('/')[0]) > 2020: data["dob_eth"] = dates[0] # Typical Ethiopic year in this context
-                        else: data["dob_greg"] = dates[0]
-                
-                if greg_pats:
-                    data["dob_greg"] = greg_pats[0].replace('/', '/ ').strip()
+                data["dob_eth"], data["dob_greg"] = extract_dates_smart(val_str, is_dob=True)
             elif key == "sex":
                 s_low = val_str.lower()
                 if any(m in s_low for m in ["ወንድ", "male", "m"]): data["sex_am"], data["sex_en"] = "ወንድ", "Male"
                 elif any(f in s_low for f in ["ሴት", "female", "f"]): data["sex_am"], data["sex_en"] = "ሴት", "Female"
             elif key == "expiry":
-                exp_c = re.sub(r'[^0-9/a-zA-Z]', ' ', val_str)
-                e_dates = re.findall(r'(\d{2,4}/\d{2}/\d{2,4})', exp_c)
-                e_greg = re.findall(r'(\d{4}/?[A-Za-z]{3}/?\d{2})', exp_c)
-                if e_dates:
-                    if len(e_dates) > 1:
-                        data["expiry_eth"], data["expiry"] = e_dates[0], e_dates[1]
-                    else:
-                        data["expiry_eth"] = e_dates[0]
-                if e_greg:
-                    data["expiry"] = e_greg[0].replace('/', '/ ').strip()
+                data["expiry_eth"], data["expiry_greg"] = extract_dates_smart(val_str, is_dob=False)
             elif key == "fcn":
                 fcn_c = re.sub(r'[^0-9]', '', val_str)
-                if len(fcn_c) > 10: data["id_number"] = fcn_c
+                if 10 <= len(fcn_c) <= 16:
+                    data["fan"] = fcn_c
+                    if data["id_number"] == "—": data["id_number"] = fcn_c
+
+    # --- GLOBAL FALLBACK SEARCH (Dates, FAN, Barcode) ---
+    all_text = " ".join(ocr_data['text'])
+    
+    # 1. FAN Fallback
+    if data["fan"] == "—":
+        fan_match = re.search(r'\b(\d{10,16})\b', all_text)
+        if fan_match: data["fan"] = fan_match.group(1)
+
+    # 2. Date Fallback (Global search if bucketed search failed)
+    if data["dob_eth"] == "—" or data["dob_greg"] == "—":
+        ge_eth, ge_greg = extract_dates_smart(all_text, is_dob=True)
+        if data["dob_eth"] == "—": data["dob_eth"] = ge_eth
+        if data["dob_greg"] == "—": data["dob_greg"] = ge_greg
+        
+    if data["expiry_eth"] == "—" or data.get("expiry_greg", "—") == "—":
+        ge_eth, ge_greg = extract_dates_smart(all_text, is_dob=False)
+        if data["expiry_eth"] == "—": data["expiry_eth"] = ge_eth
+        if data.get("expiry_greg", "—") == "—": data["expiry_greg"] = ge_greg
 
     # 6. QR OVERRIDES
     if qr_data:
@@ -402,49 +586,40 @@ def extract_front(image, qr_data=None):
 # 9. EXTRACT BACK DATA
 # -----------------------------
 def extract_back(image):
-    data = {}
+    data = {"phone": "—", "reg_am": "—", "zone_am": "—", "woreda_am": "—", 
+            "reg_en": "—", "zone_en": "—", "woreda_en": "—", "fin": "—"}
 
-    phone_crop = crop(image, 700, 750, 80, 450)
-    address_crop = crop(image, 800, 960, 80, 550)
-
-    # 1. Phone Number (Full-page label-anchored search)
-    # Scan the full back image for the Phone label, then grab the number near it
     full_back_proc = preprocess(image)
+    if full_back_proc is None: return data
     full_back_ocr = pytesseract.image_to_data(full_back_proc, lang="eng+amh", output_type=pytesseract.Output.DICT)
 
+    # 1. Phone Number
     phone_label_y = None
-    phone_label_x = None
-    
     for i in range(len(full_back_ocr['text'])):
         txt = full_back_ocr['text'][i].strip().lower()
         if "ስልክ" in txt or "phone" in txt:
             phone_label_y = full_back_ocr['top'][i]
-            phone_label_x = full_back_ocr['left'][i]
             break
 
     found_phone = None
-    if phone_label_y is not None:
-        # Search for a digit string near the phone label (within 120px vertically, same or right side)
-        for i in range(len(full_back_ocr['text'])):
-            txt = full_back_ocr['text'][i].strip()
-            y = full_back_ocr['top'][i]
-            txt_clean = re.sub(r'[^0-9\+]', '', txt)
-            if 9 <= len(txt_clean) <= 13 and phone_label_y <= y <= phone_label_y + 120:
-                if txt_clean.startswith("0") or txt_clean.startswith("251") or txt_clean.startswith("9"):
-                    found_phone = txt_clean
-                    break
-    
-    if not found_phone:
-        # Fallback: scan the entire back for any valid phone number
-        for i in range(len(full_back_ocr['text'])):
-            txt = full_back_ocr['text'][i].strip()
-            txt_clean = re.sub(r'[^0-9\+]', '', txt)
-            if 9 <= len(txt_clean) <= 13:
-                if txt_clean.startswith("0") or txt_clean.startswith("251") or txt_clean.startswith("9"):
-                    found_phone = txt_clean
-                    break
-
+    for i in range(len(full_back_ocr['text'])):
+        txt_clean = re.sub(r'[^0-9\+]', '', full_back_ocr['text'][i].strip())
+        if 9 <= len(txt_clean) <= 13:
+            if txt_clean.startswith("0") or txt_clean.startswith("251") or txt_clean.startswith("9"):
+                found_phone = txt_clean
+                break
     data["phone"] = found_phone or "—"
+
+    # 1.5 FIN Extraction (Back)
+    for i in range(len(full_back_ocr['text'])):
+        txt = full_back_ocr['text'][i].strip().lower()
+        if "fin" in txt or "የመታወቂያ" in txt or "ቁጥር" in txt:
+            for j in range(i, min(i+8, len(full_back_ocr['text']))):
+                num_cand = re.sub(r'[^0-9]', '', full_back_ocr['text'][j])
+                if 10 <= len(num_cand) <= 16:
+                    data["fin"] = num_cand
+                    break
+            if data["fin"] != "—": break
 
     # 2. Address (Full-page label-anchored extraction)
     address_label_y = None
@@ -622,9 +797,11 @@ def export_html(data):
             "dob_eth": data.get("dob_eth", "—"),
             "sex_en": data.get("sex_en", ""),
             "sex_am": data.get("sex_am", ""),
-            "expiry_greg": data.get("expiry", ""),
+            "expiry_greg": data.get("expiry_greg") or data.get("expiry") or data.get("expiry_eth") or "—",
             "expiry_eth": data.get("expiry_eth", "—"),
-            "fcn": data.get("fcn", "—"),
+            "fcn": data.get("fan", "—"),
+            "fin": data.get("fin", "—"),
+            "barcode_data": data.get("barcode_data", "—"),
             "phone": data.get("phone", ""),
             "nat_en": "Ethiopian",
             "nat_am": "ኢትዮጵያዊ",
