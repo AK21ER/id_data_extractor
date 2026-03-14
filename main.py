@@ -182,14 +182,13 @@ def transliterate_to_amharic(text):
     # High-Priority Exact Root Overrides
     text = text.replace("YOHANNES", "YOHHNIS")  # Forces ዮሐንስ instead of ዮሃነስ
     text = text.replace("HAILU", "XAYLU")       # Forces ኃይሉ instead of ሀይሉ
+    text = text.replace("AKAKI", "AQAQI")       # Forces አቃቂ instead of አካኪ
 
     # Phonetic Pre-processing (Curious Logic)
-    # 1. Names starting with KA- often use ቃ (Q) in Ethiopia (e.g., Kaleab, Kasahun)
-    if text.startswith("KA"): 
-        text = "QA" + text[2:]
-    # WO at start maps to ወ
-    if text.startswith("WO"): 
-        text = "W" + text[2:] 
+    # 1. Words starting with KA- often use ቃ (Q) in Ethiopia (e.g., Kaleab, Kasahun, Kality)
+    text = re.sub(r'\bKA', 'QA', text)
+    # Words starting with WO map to ወ
+    text = re.sub(r'\bWO', 'W', text)
         
     # 2. Collapse double consonants (Amharic gemination isn't written explicitly)
     text = re.sub(r'([BCDFGHJKLMNPQRSTVWYZ])\1+', r'\1', text)
