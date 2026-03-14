@@ -1,0 +1,3 @@
+reg_am: አዲስ አበባ
+zone_am: አቃቂ
+woreda_am: —

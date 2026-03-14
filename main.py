@@ -200,6 +200,9 @@ def transliterate_to_amharic(text):
     text = text.replace("EI", "I")   # Hussein -> Husin (after SS->S)
     text = text.replace("IE", "I")
     
+    # Map trailing 'Y' to 'I' for natural suffix sounds (Kality -> Kaliti)
+    text = re.sub(r'Y\b', 'I', text)
+    
     # EA in Kaleab is two syllables (ቃ-ለ-አብ), not one (ቃ-ሌ-ብ)
     text = text.replace("EE", "I").replace("OO", "U")
 
@@ -932,16 +935,20 @@ def extract_back(image):
         # If we have English, we compute the transliteration as a sync candidate
         trans_am = transliterate_to_amharic(en_val) if en_val != "—" else "—"
         
+        # Word count parity check
+        en_word_count = len(en_val.split())
+        am_word_count = len(am_val.split())
+        
         # Priority logic: 
-        # 1. Use image's Amharic if it's clean and doesn't look like noise
-        if am_val != "—" and len(am_val) >= 2:
+        # 1. Use image's Amharic if it's clean, doesn't look like noise, AND matches English word count
+        if am_val != "—" and len(am_val) >= 2 and en_word_count == am_word_count:
             # Basic noise check for addresses (symbols, repeating chars)
             if not any(n in am_val for n in ["ርዐ", "ከህከ", "ፚ"]):
                 data[f"{key}_am"] = am_val
             else:
                 data[f"{key}_am"] = trans_am
         else:
-            # 2. Otherwise use the high-quality transliteration
+            # 2. Otherwise (e.g. OCR truncated the Amharic address), use the full high-quality transliteration
             data[f"{key}_am"] = trans_am
 
     return data
