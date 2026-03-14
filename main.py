@@ -144,14 +144,14 @@ def transliterate_to_amharic(text):
     if not text or text == "—": return "—"
     text = re.sub(r'[^a-zA-Z\s]', '', text).upper().strip()
 
-    # Form mapping: Ge'ez(e), Ka'eb(u), Salis(i), Rabi(a), Hamis(ay), Sadis(silent), Sabi(o)
+    # Form mapping: Ge'ez(e), Ka'eb(u), Salis(i), Rabi(a), Hamis(ay/e), Sadis(silent), Sabi(o)
     forms = {
         'B': ['በ', 'ቡ', 'ቢ', 'ባ', 'ቤ', 'ብ', 'ቦ'],
         'C': ['ከ', 'ኩ', 'ኪ', 'ካ', 'ኬ', 'ክ', 'ኮ'],
         'D': ['ደ', 'ዱ', 'ዲ', 'ዳ', 'ዴ', 'ድ', 'ዶ'],
         'F': ['ፈ', 'ፉ', 'ፊ', 'ፋ', 'ፌ', 'ፍ', 'ፎ'],
         'G': ['ገ', 'ጉ', 'ጊ', 'ጋ', 'ጌ', 'ግ', 'ጎ'],
-        'H': ['ሀ', 'ሁ', 'ሂ', 'ሃ', 'ሄ', 'ህ', 'ሆ'],
+        'H': ['ሀ', 'ሁ', 'ሂ', 'ሃ', 'ሄ', 'ህ', 'ሆ'], 
         'J': ['ጀ', 'ጁ', 'ጂ', 'ጃ', 'ጄ', 'ጅ', 'ጆ'],
         'K': ['ከ', 'ኩ', 'ኪ', 'ካ', 'ኬ', 'ክ', 'ኮ'],
         'L': ['ለ', 'ሉ', 'ሊ', 'ላ', 'ሌ', 'ል', 'ሎ'],
@@ -171,22 +171,37 @@ def transliterate_to_amharic(text):
         'PH': ['ፈ', 'ፉ', 'ፊ', 'ፋ', 'ፌ', 'ፍ', 'ፎ'],
         'TH': ['ተ', 'ቱ', 'ቲ', 'ታ', 'ቴ', 'ት', 'ቶ'],
         'TS': ['ጸ', 'ጹ', 'ጺ', 'ጻ', 'ጼ', 'ጽ', 'ጾ'],
-        'NY': ['ኘ', 'ኙ', 'ኚ', 'ኛ', 'ኜ', 'ኝ', 'ኞ']
+        'NY': ['ኘ', 'ኙ', 'ኚ', 'ኛ', 'ኜ', 'ኝ', 'ኞ'],
+        'HH': ['ሐ', 'ሑ', 'ሒ', 'ሓ', 'ሔ', 'ሕ', 'ሖ'], # Used for strict mapping
+        'X':  ['ኃ', 'ኁ', 'ኂ', 'ኃ', 'ኄ', 'ኅ', 'ኆ']   # Used for strict mapping
     }
     
     # Map vowel to form index (0-6)
     v_map = {'E': 0, 'U': 1, 'I': 2, 'A': 3, 'O': 6}
 
+    # High-Priority Exact Root Overrides
+    text = text.replace("YOHANNES", "YOHHNIS")  # Forces ዮሐንስ instead of ዮሃነስ
+    text = text.replace("HAILU", "XAYLU")       # Forces ኃይሉ instead of ሀይሉ
+
     # Phonetic Pre-processing (Curious Logic)
     # 1. Names starting with KA- often use ቃ (Q) in Ethiopia (e.g., Kaleab, Kasahun)
     if text.startswith("KA"): 
         text = "QA" + text[2:]
+    # WO at start maps to ወ
+    if text.startswith("WO"): 
+        text = "W" + text[2:] 
+        
+    # 2. Collapse double consonants (Amharic gemination isn't written explicitly)
+    text = re.sub(r'([BCDFGHJKLMNPQRSTVWYZ])\1+', r'\1', text)
     
-    # 2. Handle specific clusters without collapsing them entirely
+    # 3. Handle specific clusters without collapsing them entirely
+    text = text.replace("AI", "AY")  # Hailu -> Haylu
+    text = text.replace("OU", "U")   # Ousman -> Usman
+    text = text.replace("EI", "I")   # Hussein -> Husin (after SS->S)
+    text = text.replace("IE", "I")
+    
     # EA in Kaleab is two syllables (ቃ-ለ-አብ), not one (ቃ-ሌ-ብ)
     text = text.replace("EE", "I").replace("OO", "U")
-    # WO at start maps to ወ
-    if text.startswith("WO"): text = "W" + text[2:] 
 
     final_words = []
     for word in text.split():
