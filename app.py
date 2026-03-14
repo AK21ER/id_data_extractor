@@ -54,10 +54,20 @@ def process():
         portrait_b64 = to_base64(data.get("portrait_encoded"))
         qr_b64 = to_base64(data.get("qr_code_encoded"))
         
+        # Also encode original uploaded images for the preview section
+        def get_orig_b64(file_obj):
+            file_obj.seek(0)
+            return base64.b64encode(file_obj.read()).decode('utf-8')
+
+        front_orig_b64 = get_orig_b64(front_file)
+        back_orig_b64 = get_orig_b64(back_file)
+        
         cards = [{
             "photo": f"data:image/png;base64,{portrait_b64}" if portrait_b64 else "",
             "photo_warm": f"data:image/png;base64,{portrait_b64}" if portrait_b64 else "",
             "qr": f"data:image/png;base64,{qr_b64}" if qr_b64 else "",
+            "front_orig": f"data:image/jpeg;base64,{front_orig_b64}",
+            "back_orig": f"data:image/jpeg;base64,{back_orig_b64}",
             "data": {
                 "name_en": data.get("name_en", ""),
                 "name_am": data.get("name_am", "—"),
