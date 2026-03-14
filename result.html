@@ -790,7 +790,7 @@
           <div class="barcode-box">
             <span class="fan-number-top">{{ card.data.fcn }}</span>
             <svg class="barcode-svg" id="barcodesvg_{{ loop.index0 }}"
-              data-fcn="{{ card.data.fcn | replace(' ','') }}"></svg>
+              data-fcn="{% if card.data.barcode_data and card.data.barcode_data != '—' %}{{ card.data.barcode_data }}{% else %}{{ card.data.fcn | replace(' ','') }}{% endif %}"></svg>
           </div>
         </div>
 
@@ -867,11 +867,15 @@
     // Barcodes
     document.querySelectorAll('.barcode-svg').forEach(svg => {
       const fcn = svg.dataset.fcn;
-      if (fcn) {
-        JsBarcode(svg, fcn, {
-          format: "CODE128", lineColor: "#000",
-          width: 1.3, height: 30, displayValue: false, margin: 0
-        });
+      if (fcn && fcn !== '—') {
+        try {
+          JsBarcode(svg, fcn, {
+            format: "CODE128", lineColor: "#000",
+            width: 1.3, height: 30, displayValue: false, margin: 0
+          });
+        } catch (e) {
+          console.warn('Barcode rendering failed for value:', fcn, e);
+        }
       }
     });
 

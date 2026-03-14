@@ -507,6 +507,55 @@ def extract_front(image, qr_data=None):
     name_words = buckets["name"]
     if name_words:
         name_words.sort(key=lambda x: x['top'])
+        
+        # --- NEW LOGIC: Explicit Amharic Bounding Box Crop ---
+        # 1. Find the bottom of the "Full Name" label logic (or start of bucket)
+        label_bottom_y = name_words[0]['top'] - 10 
+        
+        # 2. Find the top of the English name (first line that is purely English)
+        eng_top_y = h_proc # Default to bottom of image
+        for w in name_words:
+            # If word is mostly English letters and has decent length
+            if len(re.sub(r'[^a-zA-Z]', '', w['text'])) > 3:
+                eng_top_y = w['top']
+                break
+                
+        # 3. Define the bounding box for Amharic (between label and English)
+        am_box_top = max(0, label_bottom_y)
+        am_box_bottom = eng_top_y
+        
+        # Only proceed with this targeted crop if we have a reasonable vertical gap
+        if am_box_bottom - am_box_top > 15:
+            # Find horizontal bounds from all words in this vertical gap
+            am_cand_words = [w for w in name_words if am_box_top <= w['top'] <= am_box_bottom]
+            if am_cand_words:
+                min_x = max(0, min(w['left'] for w in am_cand_words) - 15)
+                max_x = min(w_proc, max(w['left'] + w['w'] for w in am_cand_words) + 15)
+                
+                if max_x - min_x > 50:
+                    am_roi = proc_full[am_box_top:am_box_bottom, min_x:max_x]
+                    
+                    # Optional: Save crop for debugging
+                    # cv2.imwrite("debug_amh_crop.png", am_roi)
+                    
+                    # Clean and OCR the specific crop
+                    roi_z = cv2.resize(am_roi, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                    th1 = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
+                    raw_am_crop = pytesseract.image_to_string(th1, lang="amh", config='--psm 6').strip()
+                    
+                    # Clean the result
+                    clean_crop = re.sub(r'[a-zA-Z0-9\(\)\{\}\[\]\.\,\|\!\?\-\_\/\\\»]', ' ', raw_am_crop)
+                    clean_crop = re.sub(r'[\u1369-\u1371]', ' ', clean_crop) 
+                    am_words = [w for w in clean_crop.replace("፣", " ").replace("።", " ").split() if sum(1 for c in w if 0x1200 <= ord(c) <= 0x137F) / max(1, len(w)) > 0.6]
+                    
+                    if am_words and len(" ".join(am_words)) > 3:
+                        data["name_am"] = " ".join(am_words[:4])
+                        # Filter out garbage
+                        garbage_tokens = ["ርዐ", "ከህከ", "ፚ", "ቺጅ", "ጩወ", "ፍነ", "ርን", "ቺ", "ጩ", "ኚ", "ጯ"] 
+                        if any(g in data["name_am"] for g in garbage_tokens):
+                            data["name_am"] = "—"
+
+        # --- Standard Line-by-Line Processing (Fallback for English and missing Amharic) ---
         n_lines = []
         cl = [name_words[0]]
         for w in name_words[1:]:
@@ -523,56 +572,45 @@ def extract_front(image, qr_data=None):
             l_left = min(w['left'] for w in nl) - 15
             l_right = max(w['left'] for w in nl) + 400
             
-            # Expand ROI upwards to catch Amharic if it's slightly higher than English
             y1, y2 = max(0, l_top - 60), min(h_proc, l_bot + 20)
             x1, x2 = max(0, l_left), min(w_proc, l_right)
             if (y2-y1) < 20 or (x2-x1) < 40: continue
             
             roi_g = proc_full[y1:y2, x1:x2]
-            # Multiple thresholding styles for better noise rejection
             roi_z = cv2.resize(roi_g, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            th1 = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
-            # Second threshold for thick/darker text
-            _, th2 = cv2.threshold(roi_z, 140, 255, cv2.THRESH_BINARY)
             
-            # Use multi-pass OCR on the same ROI
-            pass1 = pytesseract.image_to_string(th1, lang="amh", config='--psm 6').strip()
-            pass2 = pytesseract.image_to_string(th2, lang="amh", config='--psm 6').strip()
-            am_n = pass1 + " " + pass2
-            
+            # Extract English
             en_n = pytesseract.image_to_string(roi_z, lang="eng", config='--psm 7').strip()
-            
-            # Clean Amharic (Reject words with > 30% non-Amharic characters)
-            def is_legit_amh(w):
-                if len(w) < 2 or len(w) > 13: return False
-                amh_chars = sum(1 for c in w if 0x1200 <= ord(c) <= 0x137F)
-                if amh_chars / len(w) < 0.7: return False
-                # Nonsense repetitions
-                if sum(1 for i in range(len(w)-2) if w[i] == w[i+1] == w[i+2]) > 0: return False
-                return True
-
-            am_c = re.sub(r'[a-zA-Z0-9\(\)\{\}\[\]\.\,\|\!\?\-\_\/\\\»]', ' ', am_n)
-            am_c = re.sub(r'[\u1369-\u1371]', ' ', am_c) 
-            am_words = [w for w in am_c.replace("፣", " ").replace("።", " ").split() if is_legit_amh(w)]
-            
-            if am_words: am_parts.append(" ".join(am_words))
-            
-            # Clean English
             en_words = [w for w in en_n.split() if int(len(re.findall(r'[a-z]', w.lower()))) > 1]
             en_words = [w for w in en_words if w.lower() not in ["name", "full", "id", "card", "national"]]
             if en_words: en_parts.append(" ".join(en_words))
+            
+            # Fallback Amharic extraction if our precise crop failed
+            if data["name_am"] == "—":
+                th1 = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
+                _, th2 = cv2.threshold(roi_z, 140, 255, cv2.THRESH_BINARY)
+                pass1 = pytesseract.image_to_string(th1, lang="amh", config='--psm 6').strip()
+                pass2 = pytesseract.image_to_string(th2, lang="amh", config='--psm 6').strip()
+                am_n = pass1 + " " + pass2
+                am_c = re.sub(r'[a-zA-Z0-9\(\)\{\}\[\]\.\,\|\!\?\-\_\/\\\»]', ' ', am_n)
+                am_words = [w for w in am_c.replace("፣", " ").replace("።", " ").split() if len(w) > 1 and sum(1 for c in w if 0x1200 <= ord(c) <= 0x137F) / len(w) > 0.6]
+                if am_words: am_parts.append(" ".join(am_words))
 
-        if am_parts:
+        # Compile Amharic fallback if needed
+        if data["name_am"] == "—" and am_parts:
             seen = set()
             u_am = []
             for p in am_parts:
                 for w in p.split():
-                    if w not in seen:
-                        # Stricter noise rejection
-                        if not any(noise in w for noise in ["ርዐ", "ቦዩህ", "ነሃ", "ልከ", "ከህ", "ከህከ"]):
-                            u_am.append(w); seen.add(w)
+                    if w not in seen and not any(noise in w for noise in ["ርዐ", "ቦዩህ", "ነሃ", "ልከ", "ከህ", "ከህከ"]):
+                        u_am.append(w); seen.add(w)
             data["name_am"] = " ".join(u_am[:4])
+            
+            garbage_tokens = ["ርዐ", "ከህከ", "ፚ", "ቺጅ", "ጩወ", "ፍነ", "ርን", "ቺ", "ጩ", "ኚ", "ጯ"] 
+            if any(g in data["name_am"] for g in garbage_tokens) or re.search(r'[፠-⠿]', data["name_am"]) or len(data["name_am"]) < 3:
+                data["name_am"] = "—"
         
+        # Compile English
         if en_parts:
             seen = set()
             u_en = []
@@ -581,18 +619,6 @@ def extract_front(image, qr_data=None):
                     if w.lower() not in seen:
                         u_en.append(w); seen.add(w.lower())
             data["name_en"] = " ".join(u_en[:4])
-
-        # Noise rejection for Amharic
-        # We classify as noise if it has too many symbols or known OCR artifacts
-        if data["name_am"] != "—":
-            # Identify obvious garbage symbols that haunt OCR but aren't in names
-            garbage_tokens = ["ርዐ", "ከህከ", "ፚ", "ቺጅ", "ጩወ", "ፍነ", "ርን", "ቺ", "ጩ", "ኚ", "ጯ"] 
-            if any(g in data["name_am"] for g in garbage_tokens):
-                data["name_am"] = "—"
-            elif re.search(r'[፠-⠿]', data["name_am"]): # Punctuation/Symbols only
-                data["name_am"] = "—"
-            elif len(data["name_am"]) < 3: 
-                 data["name_am"] = "—"
 
     # --- Other Fields ---
     for key in ["dob", "sex", "expiry", "issue", "fcn"]:
@@ -782,15 +808,24 @@ def extract_back(image):
     data["phone"] = found_phone or "—"
 
     # 1.5 FIN Extraction (Back)
+    full_text = " ".join(full_back_ocr['text'])
+    
+    # Primary Search: Next to "FIN" label
     for i in range(len(full_back_ocr['text'])):
         txt = full_back_ocr['text'][i].strip().lower()
         if "fin" in txt or "የመታወቂያ" in txt or "ቁጥር" in txt:
             for j in range(i, min(i+8, len(full_back_ocr['text']))):
                 num_cand = re.sub(r'[^0-9]', '', full_back_ocr['text'][j])
-                if 10 <= len(num_cand) <= 16:
+                if 12 <= len(num_cand) <= 16:
                     data["fin"] = num_cand
                     break
             if data["fin"] != "—": break
+
+    # Fallback Search: Find any 12+ digit sequence anywhere in the text
+    if data["fin"] == "—":
+        fin_match = re.search(r'\b(\d{4}[\s-]?\d{4}[\s-]?\d{4})\b', full_text)
+        if fin_match:
+            data["fin"] = re.sub(r'[^0-9]', '', fin_match.group(1))
 
     # 2. Address (Full-page label-anchored extraction)
     address_label_y = None
@@ -972,6 +1007,14 @@ def export_html(data):
         print("result.html not found, falling back to simple output.")
         return
 
+    # Smart fallback for the 16-digit number
+    actual_id = "—"
+    for k in ["id_number", "fan", "barcode_data"]:
+        val = data.get(k)
+        if val and val != "—" and len(val) >= 10:
+            actual_id = val
+            break
+
     # Mock cards data for result.html
     # It expects: cards: [{ photo: '', photo_warm: '', qr: '', data: { ... } }]
     cards = [{
@@ -987,9 +1030,9 @@ def export_html(data):
             "sex_am": data.get("sex_am", ""),
             "expiry_greg": data.get("expiry_greg") or data.get("expiry") or data.get("expiry_eth") or "—",
             "expiry_eth": data.get("expiry_eth", "—"),
-            "fcn": data.get("fan", "—"),
+            "fcn": actual_id,
             "fin": data.get("fin", "—"),
-            "barcode_data": data.get("barcode_data", "—"),
+            "barcode_data": actual_id,
             "phone": data.get("phone", ""),
             "nat_en": "Ethiopian",
             "nat_am": "ኢትዮጵያዊ",
