@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ethiopian Digital ID - Official Document</title>
+    <style>
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 40px;
+            color: #1a2e1a;
+            background: #fdfdfd;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        header {
+            text-align: center;
+            border-bottom: 2px solid #b08d57;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+        }
+
+        header h1 {
+            font-size: 24px;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .top-section {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .portrait {
+            width: 140px;
+            height: 180px;
+            border: 1px solid #ccc;
+            background: #eee;
+            flex-shrink: 0;
+        }
+
+        .portrait img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .identity-header {
+            flex-grow: 1;
+        }
+
+        .fcn-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .fcn {
+            font-weight: bold;
+            color: #b08d57;
+        }
+
+        .disclaimer-small {
+            font-size: 11px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .sub-label {
+            font-size: 11px;
+            color: #b08d57;
+            margin-bottom: 2px;
+        }
+
+        .name-box {
+            margin-top: 15px;
+        }
+
+        .name {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .section-header {
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+            padding-bottom: 5px;
+            color: #1a6b3e;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .data-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #b08d57;
+            margin-bottom: 5px;
+        }
+
+        .data-val {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .val-primary {
+            font-weight: bold;
+            font-size: 15px;
+        }
+
+        .val-alt {
+            font-size: 13px;
+            color: #555;
+        }
+
+        .disclaimer-section {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 40px;
+            font-size: 12px;
+            margin-top: 50px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+
+        .disco-item {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .disco-num {
+            font-weight: bold;
+            font-size: 16px;
+            color: #1a6b3e;
+        }
+
+        .disco-text {
+            color: #333;
+        }
+
+        .disco-alt {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .qr-area {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .qr-area img {
+            width: 150px;
+            height: 150px;
+            border: 1px solid #eee;
+        }
+
+        footer {
+            margin-top: 60px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 2px solid #b08d57;
+            padding-top: 15px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .footer-links span {
+            margin: 0 10px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+
+            .container {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Ethiopian Digital ID Card</h1>
+        </header>
+
+        {% for card in cards %}
+        <div class="top-section">
+            <div class="portrait">
+                <img src="{{ card.photo }}" alt="Portrait">
+            </div>
+            <div class="identity-header">
+                <div class="fcn-line">
+                    <div><span class="sub-label">FCN:</span> <span class="fcn">{{ card.data.fcn }}</span></div>
+                    <div class="disclaimer-small">Disclaimer: For your personal use only!</div>
+                </div>
+                <div class="name-box">
+                    <div class="sub-label">First, Middle, Surname</div>
+                    <div class="name">{{ card.data.name_en }}</div>
+                    <div class="name" style="margin-top: 5px;">{{ card.data.name_am }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header">Demographic Data |</div>
+        <div class="data-grid">
+            <div class="data-item">
+                <span class="data-label">Date of Birth</span>
+                <span class="data-val val-primary">{{ card.data.dob_greg }}</span>
+                <span class="data-val val-alt">{{ card.data.dob_eth }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Region</span>
+                <span class="data-val val-primary">{{ card.data.reg_en }}</span>
+                <span class="data-val val-alt">{{ card.data.reg_am }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">SEX</span>
+                <span class="data-val val-primary">{{ card.data.sex_en }}</span>
+                <span class="data-val val-alt">{{ card.data.sex_am }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Subcity / zone</span>
+                <span class="data-val val-primary">{{ card.data.zone_en }}</span>
+                <span class="data-val val-alt">{{ card.data.zone_am }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Nationality</span>
+                <span class="data-val val-primary">{{ card.data.nat_en }}</span>
+                <span class="data-val val-alt">{{ card.data.nat_am }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Woreda</span>
+                <span class="data-val val-primary">{{ card.data.woreda_en }}</span>
+                <span class="data-val val-alt">{{ card.data.woreda_am }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Phone Number</span>
+                <span class="data-val val-primary">{{ card.data.phone }}</span>
+            </div>
+        </div>
+
+        <div class="section-header">Disclaimer |</div>
+        <div class="disclaimer-section">
+            <div class="left-disco">
+                <div class="disco-item">
+                    <div class="disco-num">01</div>
+                    <div class="disco-text">
+                        As per the Ethiopian Digital ID Proclamation (id.et/law) any card credentials
+                        printed or accessed for print directly from the National ID system (Fayda) are
+                        valid forms of legal Identity.
+                    </div>
+                </div>
+                <div class="disco-item">
+                    <div class="disco-num">02</div>
+                    <div class="disco-text">
+                        Residents/service providers can scan the QR code below to verify and
+                        protect themselves from fraudulent actors/activities.
+                    </div>
+                </div>
+                <div class="qr-area">
+                    <img src="{{ card.qr }}" alt="QR Code">
+                </div>
+            </div>
+            <div class="right-disco">
+                <div class="disco-text disco-alt" style="margin-bottom: 20px;">
+                    Personal data fields such as nationality, address, and date of birth provided on this ID,
+                    are based on the declarations made by the registrant. Hence, background-check has not
+                    been conducted for their authenticity.
+                </div>
+                <div style="font-size: 14px; font-weight: bold; color: #1a6b3e;">03</div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <footer>
+            <div class="footer-contact">
+                <strong>9779</strong> | Id.gov.et | info@id.et
+            </div>
+            <div class="footer-links">
+                National ID Program of Ethiopia
+            </div>
+        </footer>
+    </div>
+</body>
+
+</html>

@@ -12,11 +12,14 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 
 # 1. LOAD IMAGE
 # -----------------------------
-def load_image(path):
-    image = cv2.imread(path)
+def load_image(path_or_img):
+    if isinstance(path_or_img, str):
+        image = cv2.imread(path_or_img)
+    else:
+        image = path_or_img
 
     if image is None:
-        raise Exception("Image not found: " + path)
+        raise Exception("Image not found or invalid: " + str(path_or_img))
 
     return image
 
@@ -367,22 +370,23 @@ def crop(img, y1,y2,x1,x2):
 # -----------------------------
 # 7. EXTRACT ASSETS (PORTRAIT & QR)
 # -----------------------------
-def extract_assets(qr_id_path):
+def extract_assets(qr_id_path_or_img):
     """
-    Crops portrait and QR from qr_id.jpg.
-    Returns (portrait_path, qr_path).
+    Crops portrait and QR from qr_id image.
+    Returns (portrait_data, qr_data).
     """
-    img = load_image(qr_id_path)
+    img = load_image(qr_id_path_or_img)
     
     # Adjusted slightly higher from 305 to 280
     portrait = crop(img, 280, 580, 150, 430)
-    cv2.imwrite("portrait.png", portrait)
+    # We will return the encoded image data instead of just saving it
+    _, portrait_encoded = cv2.imencode('.png', portrait)
     
     # QR crop - keeping exactly as it was in the "perfect" version
     qr_img = crop(img, 725, 1050, 150, 426)
-    cv2.imwrite("qr_code.png", qr_img)
+    _, qr_encoded = cv2.imencode('.png', qr_img)
     
-    return "portrait.png", "qr_code.png"
+    return portrait_encoded, qr_encoded
 
 
 # -----------------------------
@@ -1071,29 +1075,32 @@ def export_html(data):
 # -----------------------------
 # 12. MAIN PROCESS FUNCTION
 # -----------------------------
-def process_screenshots(front_path, back_path, qr_path):
+def process_screenshots(front_img, back_img, qr_img):
     """
-    Specialized function for front_id, back_id, and qr_id screenshots.
+    Specialized function for front_id, back_id, and qr_id images.
+    Accepts path strings or OpenCV image objects.
     """
     # 1. Extract assets from qr_id
-    portrait, qr_code = extract_assets(qr_path)
+    portrait_encoded, qr_code_encoded = extract_assets(qr_img)
     
     # 2. Extract QR data
-    qr_img = load_image(qr_path)
-    qr_raw = read_qr(qr_img)
+    qr_img_obj = load_image(qr_img)
+    qr_raw = read_qr(qr_img_obj)
     qr_data = parse_qr_data(qr_raw)
     
     # 3. Extract Front
-    front_img = load_image(front_path)
-    front_data = extract_front(front_img, qr_data)
+    front_img_obj = load_image(front_img)
+    front_data = extract_front(front_img_obj, qr_data)
     
     # 4. Extract Back
-    back_img = load_image(back_path)
-    back_data = extract_back(back_img)
+    back_img_obj = load_image(back_img)
+    back_data = extract_back(back_img_obj)
     
     # Merge results
     final_data = {**front_data, **back_data}
     final_data["qr_raw"] = qr_raw
+    final_data["portrait_encoded"] = portrait_encoded
+    final_data["qr_code_encoded"] = qr_code_encoded
     
     return final_data
 
