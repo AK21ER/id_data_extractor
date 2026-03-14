@@ -142,44 +142,51 @@ def transliterate_to_amharic(text):
     Used for name fields when Amharic OCR fails.
     """
     if not text or text == "—": return "—"
-    
-    # Sanitize: remove non-alpha (except spaces) for mapping
-    orig_text = text
     text = re.sub(r'[^a-zA-Z\s]', '', text).upper().strip()
-    
-    # Advanced CV mapping
-    # Consonants (in Sadis - 6th form)
-    cons = {
-        'B': 'ብ', 'C': 'ክ', 'D': 'ድ', 'F': 'ፍ', 'G': 'ግ', 'H': 'ህ', 'J': 'ጅ', 'K': 'ክ', 'L': 'ል', 
-        'M': 'ም', 'N': 'ን', 'P': 'ፕ', 'Q': 'ቅ', 'R': 'ር', 'S': 'ስ', 'T': 'ት', 'V': 'ቭ', 'W': 'ው', 
-        'X': 'ክስ', 'Y': 'ይ', 'Z': 'ዝ', 'CH': 'ች', 'SH': 'ሽ', 'PH': 'ፍ', 'TH': 'ት', 'TS': 'ጽ', 'NY': 'ኝ'
+
+    # Form mapping: Ge'ez(e), Ka'eb(u), Salis(i), Rabi(a), Hamis(ay), Sadis(silent), Sabi(o)
+    forms = {
+        'B': ['በ', 'ቡ', 'ቢ', 'ባ', 'ቤ', 'ብ', 'ቦ'],
+        'C': ['ከ', 'ኩ', 'ኪ', 'ካ', 'ኬ', 'ክ', 'ኮ'],
+        'D': ['ደ', 'ዱ', 'ዲ', 'ዳ', 'ዴ', 'ድ', 'ዶ'],
+        'F': ['ፈ', 'ፉ', 'ፊ', 'ፋ', 'ፌ', 'ፍ', 'ፎ'],
+        'G': ['ገ', 'ጉ', 'ጊ', 'ጋ', 'ጌ', 'ግ', 'ጎ'],
+        'H': ['ሀ', 'ሁ', 'ሂ', 'ሃ', 'ሄ', 'ህ', 'ሆ'],
+        'J': ['ጀ', 'ጁ', 'ጂ', 'ጃ', 'ጄ', 'ጅ', 'ጆ'],
+        'K': ['ከ', 'ኩ', 'ኪ', 'ካ', 'ኬ', 'ክ', 'ኮ'],
+        'L': ['ለ', 'ሉ', 'ሊ', 'ላ', 'ሌ', 'ል', 'ሎ'],
+        'M': ['መ', 'ሙ', 'ሚ', 'ማ', 'ሜ', 'ም', 'ሞ'],
+        'N': ['ነ', 'ኑ', 'ኒ', 'ና', 'ኔ', 'ን', 'ኖ'],
+        'P': ['ፐ', 'ፑ', 'ፒ', 'ፓ', 'ፔ', 'ፕ', 'ፖ'],
+        'Q': ['ቀ', 'ቁ', 'ቂ', 'ቃ', 'ቄ', 'ቅ', 'ቆ'],
+        'R': ['ረ', 'ሩ', 'ሪ', 'ራ', 'ሬ', 'ር', 'ሮ'],
+        'S': ['ሰ', 'ሱ', 'ሲ', 'ሳ', 'ሴ', 'ስ', 'ሶ'],
+        'T': ['ተ', 'ቱ', 'ቲ', 'ታ', 'ቴ', 'ት', 'ቶ'],
+        'V': ['ቨ', 'ቩ', 'ቪ', 'ቫ', 'ቬ', 'ቭ', 'ቮ'],
+        'W': ['ወ', 'ዉ', 'ዊ', 'ዋ', 'ዌ', 'ው', 'ዎ'],
+        'Y': ['የ', 'ዩ', 'ዪ', 'ያ', 'ዬ', 'ይ', 'ዮ'],
+        'Z': ['ዘ', 'ዙ', 'ዚ', 'ዛ', 'ዜ', 'ዝ', 'ዞ'],
+        'CH': ['ቸ', 'ቹ', 'ቺ', 'ቻ', 'ቼ', 'ች', 'ቾ'],
+        'SH': ['ሸ', 'ሹ', 'ሺ', 'ሻ', 'ሼ', 'ሽ', 'ሾ'],
+        'PH': ['ፈ', 'ፉ', 'ፊ', 'ፋ', 'ፌ', 'ፍ', 'ፎ'],
+        'TH': ['ተ', 'ቱ', 'ቲ', 'ታ', 'ቴ', 'ት', 'ቶ'],
+        'TS': ['ጸ', 'ጹ', 'ጺ', 'ጻ', 'ጼ', 'ጽ', 'ጾ'],
+        'NY': ['ኘ', 'ኙ', 'ኚ', 'ኛ', 'ኜ', 'ኝ', 'ኞ']
     }
-    # Vowel transformations (Ge'ez-based)
-    vowels = {
-        'A': 0, 'U': 1, 'I': 2, 'O': 6, 'E': 5
-    }
     
-    # Syllable table (Sadis base + offset)
-    def build_syllable(c_sadis, v_char):
-        if not v_char or v_char not in vowels: return c_sadis
-        base_ord = ord(c_sadis)
-        offset = vowels[v_char]
-        irregulars = {
-            'ሀ': 0, 'ለ': 8, 'ሐ': 16, 'መ': 24, 'ሠ': 32, 'ረ': 40, 'ሰ': 48, 'ሸ': 56, 'ቀ': 64, 
-            'በ': 72, 'ተ': 80, 'ቸ': 88, 'ኀ': 96, 'ነ': 104, 'ኘ': 112, 'አ': 120, 'ከ': 128, 
-            'ኸ': 136, 'ወ': 144, 'ዐ': 152, 'ዘ': 160, 'ዠ': 168, 'የ': 176, 'ደ': 184, 'ጀ': 192, 
-            'ገ': 200, 'ጠ': 208, 'ጨ': 216, 'ጰ': 224, 'ጸ': 232, 'ፀ': 240, 'ፈ': 248, 'ፐ': 256
-        }
-        geez = None
-        for k, v in irregulars.items():
-            if base_ord >= 0x1200 + v and base_ord < 0x1200 + v + 7:
-                geez = chr(0x1200 + v); break
-        if geez:
-            if v_char == 'A': return chr(ord(geez) + 3) # Rabi
-            if v_char == 'E': return geez # Default to Ge'ez
-            if v_char == 'I': return chr(ord(geez) + 2)
-            return chr(ord(geez) + offset)
-        return c_sadis
+    # Map vowel to form index (0-6)
+    v_map = {'E': 0, 'U': 1, 'I': 2, 'A': 3, 'O': 6}
+
+    # Phonetic Pre-processing (Curious Logic)
+    # 1. Names starting with KA- often use ቃ (Q) in Ethiopia (e.g., Kaleab, Kasahun)
+    if text.startswith("KA"): 
+        text = "QA" + text[2:]
+    
+    # 2. Handle specific clusters without collapsing them entirely
+    # EA in Kaleab is two syllables (ቃ-ለ-አብ), not one (ቃ-ሌ-ብ)
+    text = text.replace("EE", "I").replace("OO", "U")
+    # WO at start maps to ወ
+    if text.startswith("WO"): text = "W" + text[2:] 
 
     final_words = []
     for word in text.split():
@@ -188,23 +195,28 @@ def transliterate_to_amharic(text):
             final_words.append(word); continue
         w_res = ""; wi = 0
         while wi < len(word):
-            c_part = ""
-            if wi + 1 < len(word) and word[wi:wi+2] in cons:
-                c_part = word[wi:wi+2]; wi += 2
-            elif word[wi] in cons:
-                c_part = word[wi]; wi += 1
-            if c_part:
-                if wi < len(word) and word[wi] in vowels:
-                    w_res += build_syllable(cons[c_part], word[wi]); wi += 1
-                else:
-                    w_res += cons[c_part]
+            c_key = ""
+            if wi + 1 < len(word) and word[wi:wi+2] in forms:
+                c_key = word[wi:wi+2]; wi += 2
+            elif word[wi] in forms:
+                c_key = word[wi]; wi += 1
+            
+            if c_key:
+                if wi < len(word) and word[wi] in v_map:
+                    v_idx = v_map[word[wi]]
+                    # Special Rule: 'E' followed by 'A' (like in Kaleab)
+                    # The 'E' should be Ge'ez (0), not Hamis (4)
+                    if word[wi] == 'E' and wi + 1 < len(word) and word[wi+1] == 'A':
+                        v_idx = 0
+                    w_res += forms[c_key][v_idx]
+                    wi += 1
+                else: 
+                    # Default to Sadis (silent) if no vowel follows
+                    w_res += forms[c_key][5]
             else:
                 v = word[wi]
-                if v == 'A': w_res += 'አ'
-                elif v == 'U': w_res += 'ኡ'
-                elif v == 'I': w_res += 'ኢ'
-                elif v == 'O': w_res += 'ኦ'
-                elif v == 'E': w_res += 'እ'
+                # Map lone vowels to their distinct Amharic characters
+                w_res += {'A': 'አ', 'U': 'ኡ', 'I': 'ኢ', 'O': 'ኦ', 'E': 'እ'}.get(v, '')
                 wi += 1
         final_words.append(w_res)
     return " ".join(final_words)
@@ -558,13 +570,13 @@ def extract_front(image, qr_data=None):
         # Noise rejection for Amharic
         # We classify as noise if it has too many symbols or known OCR artifacts
         if data["name_am"] != "—":
-            noise_chars = ["፡", "፦", "፥", "ርዐ", "ከህ", "ከህከ", "ጩ", "ቺ", "ኚ", "ጯ", "ፚ"]
-            if any(n in data["name_am"] for n in noise_chars):
+            # Identify obvious garbage symbols that haunt OCR but aren't in names
+            garbage_tokens = ["ርዐ", "ከህከ", "ፚ", "ቺጅ", "ጩወ", "ፍነ", "ርን", "ቺ", "ጩ", "ኚ", "ጯ"] 
+            if any(g in data["name_am"] for g in garbage_tokens):
                 data["name_am"] = "—"
-            # If name contains characters that are almost never in names
-            elif re.search(r'[፠-⠿]', data["name_am"]): # Punctuation/Symbols
+            elif re.search(r'[፠-⠿]', data["name_am"]): # Punctuation/Symbols only
                 data["name_am"] = "—"
-            elif len(data["name_am"]) < 3:
+            elif len(data["name_am"]) < 3: 
                  data["name_am"] = "—"
 
     # --- Other Fields ---
@@ -708,12 +720,18 @@ def extract_front(image, qr_data=None):
         if data["name_am"] == "—" or len(data["name_am"]) < 3:
             data["name_am"] = trans_am
         else:
-            # If we have both, compare them. 
-            # If OCR is completely different length than English words, it might be noise
+            # If we have both, verify the OCR is likely a real name
             en_word_count = len(data["name_en"].split())
             am_word_count = len(data["name_am"].split())
-            if abs(en_word_count - am_word_count) > 1:
+            
+            # If word counts differ, or OCR has suspicious repeat chars, use transliteration
+            if en_word_count != am_word_count:
                 data["name_am"] = trans_am
+            # Double check for very common OCR failures again
+            elif any(x in data["name_am"] for x in ["ክ", "ች", "ሽ", "ዝ", "ጅ"]):
+                 # If Amharic OCR contains too many Sadis (6th) markers it might be noise
+                 # but this is risky, so we just stick to word count mostly.
+                 pass
             # Otherwise, we keep the OCR as requested ("exact as image")
             # unless the OCR has suspicious characters
     
@@ -855,22 +873,26 @@ def extract_back(image):
     data["zone_en"] = en_parts_map["zone"] or "—"
     data["woreda_en"] = en_parts_map["woreda"] or "—"
 
-    # 3. Final Address Transliteration (Syncing)
-    # If English exists, we transliterate to Amharic for consistency and to fix OCR noise
-    if data["reg_en"] != "—":
-        data["reg_am"] = transliterate_to_amharic(data["reg_en"])
-    elif data["reg_am"] == "—":
-        data["reg_am"] = "—"
-
-    if data["zone_en"] != "—":
-        data["zone_am"] = transliterate_to_amharic(data["zone_en"])
-    elif data["zone_am"] == "—":
-        data["zone_am"] = "—"
-
-    if data["woreda_en"] != "—":
-        data["woreda_am"] = transliterate_to_amharic(data["woreda_en"])
-    elif data["woreda_am"] == "—":
-        data["woreda_am"] = "—"
+    # 3. Final Address Transliteration (Syncing & Fallback)
+    # We prioritize OCR from the image if it's legitimate
+    for key in ["reg", "zone", "woreda"]:
+        en_val = data[f"{key}_en"]
+        am_val = am_parts_map.get(key) or "—"
+        
+        # If we have English, we compute the transliteration as a sync candidate
+        trans_am = transliterate_to_amharic(en_val) if en_val != "—" else "—"
+        
+        # Priority logic: 
+        # 1. Use image's Amharic if it's clean and doesn't look like noise
+        if am_val != "—" and len(am_val) >= 2:
+            # Basic noise check for addresses (symbols, repeating chars)
+            if not any(n in am_val for n in ["ርዐ", "ከህከ", "ፚ"]):
+                data[f"{key}_am"] = am_val
+            else:
+                data[f"{key}_am"] = trans_am
+        else:
+            # 2. Otherwise use the high-quality transliteration
+            data[f"{key}_am"] = trans_am
 
     return data
 
