@@ -1,42 +1,43 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const drops = ['front', 'back', 'qr'];
-    const files = { front: null, back: null, qr: null };
     const processBtn = document.getElementById('process-btn');
-    const resultsSection = document.getElementById('results-section');
+    const files = {}; // store files per card
 
-    drops.forEach(type => {
-        const zone = document.getElementById(`drop-${type}`);
-        const input = document.getElementById(`file-${type}`);
-        const preview = document.getElementById(`preview-${type}`);
+    // Loop over 5 cards
+    for (let c = 1; c <= 5; c++) {
+        ['front', 'back', 'qr'].forEach(type => {
+            const zone = document.getElementById(`drop-${type}-${c}`);
+            const input = document.getElementById(`file-${type}-${c}`);
+            const preview = document.getElementById(`preview-${type}-${c}`);
 
-        zone.onclick = () => input.click();
+            if (!zone || !input || !preview) return;
 
-        zone.ondragover = (e) => {
-            e.preventDefault();
-            zone.classList.add('active');
-        };
+            zone.onclick = () => input.click();
 
-        zone.ondragleave = () => zone.classList.remove('active');
+            zone.ondragover = (e) => {
+                e.preventDefault();
+                zone.classList.add('active');
+            };
+            zone.ondragleave = () => zone.classList.remove('active');
+            zone.ondrop = (e) => {
+                e.preventDefault();
+                zone.classList.remove('active');
+                if (e.dataTransfer.files.length) {
+                    handleFile(c, type, e.dataTransfer.files[0], preview, zone);
+                }
+            };
 
-        zone.ondrop = (e) => {
-            e.preventDefault();
-            zone.classList.remove('active');
-            if (e.dataTransfer.files.length) {
-                handleFile(type, e.dataTransfer.files[0], preview, zone);
-            }
-        };
+            input.onchange = (e) => {
+                if (input.files.length) {
+                    handleFile(c, type, input.files[0], preview, zone);
+                }
+            };
+        });
+    }
 
-        input.onchange = (e) => {
-            if (input.files.length) {
-                handleFile(type, input.files[0], preview, zone);
-            }
-        };
-    });
-
-    function handleFile(type, file, preview, zone) {
+    function handleFile(cardNum, type, file, preview, zone) {
         if (!file.type.startsWith('image/')) return;
 
-        files[type] = file;
+        files[`card${cardNum}-${type}`] = file;
 
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -48,9 +49,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkReady() {
-        if (files.front && files.back && files.qr) {
-            processBtn.disabled = false;
+        // Enable button if at least 1 card has all 3 files
+        for (let c = 1; c <= 5; c++) {
+            if (files[`card${c}-front`] && files[`card${c}-back`] && files[`card${c}-qr`]) {
+                processBtn.disabled = false;
+                return;
+            }
         }
+        processBtn.disabled = true;
     }
 
     processBtn.onclick = async () => {
@@ -58,19 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
         processBtn.disabled = true;
 
         const formData = new FormData();
-        formData.append('front', files.front);
-        formData.append('back', files.back);
-        formData.append('qr', files.qr);
+        // append all uploaded files
+        Object.keys(files).forEach(key => formData.append(key, files[key]));
 
         const layout = document.querySelector('input[name="layout"]:checked').value;
         formData.append('layout', layout);
 
         try {
-            const response = await fetch('/process', {
-                method: 'POST',
-                body: formData
-            });
-
+            const response = await fetch('/process', { method: 'POST', body: formData });
             if (!response.ok) throw new Error('Processing failed');
 
             const html = await response.text();

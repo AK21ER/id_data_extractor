@@ -1,0 +1,14 @@
+
+--- Testing front_id.jpg ---
+DEBUG: Side right variance: 1058.61
+DEBUG: Selected side right
+Saved out_issue_greg_encoded_front_id.jpg.png
+Saved out_issue_eth_encoded_front_id.jpg.png
+OCR Greg: 8/07/04 | 2026/Mar/
+OCR Eth: on 18/07/04 |
+
+--- Testing id_image.jpg ---
+MISSING: issue_greg_encoded
+MISSING: issue_eth_encoded
+OCR Greg: —
+OCR Eth: —

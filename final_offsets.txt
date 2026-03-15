@@ -1,0 +1,25 @@
+Error parsing line: Text: '2026/07/02|2034/Mar/11' | X: 111, Y: 853, W: 206, H: 18 - list index out of range
+--- front_id.jpg (Vertical Screenshot) ---
+Text: A | X: 0.2267, Y: 0.5266, W: 0.0254, H: 0.0070
+Text: YRH | X: 0.1895, Y: 0.5484, W: 0.0525, H: 0.0102
+Text: Date | X: 0.2944, Y: 0.5875, W: 0.0406, H: 0.0063
+Text: Sex | X: 0.2234, Y: 0.6172, W: 0.0321, H: 0.0070
+Text: Female | X: 0.2487, Y: 0.6312, W: 0.1015, H: 0.0102
+Text: Date | X: 0.3147, Y: 0.6477, W: 0.0372, H: 0.0063
+Text: nce | X: 0.2166, Y: 0.7063, W: 0.0491, H: 0.0102
+Text: f | X: 0.6244, Y: 0.7000, W: 0.0135, H: 0.0102
+Text: [Dateot | X: 0.8223, Y: 0.5148, W: 0.0508, H: 0.0297
+Text: issue | X: 0.8223, Y: 0.4914, W: 0.0508, H: 0.0195
+Text: 2026/Mar/ | X: 0.8376, Y: 0.3070, W: 0.0186, H: 0.0781
+Text: 13 | X: 0.8376, Y: 0.2898, W: 0.0186, H: 0.0117
+Error parsing line: Text: '|' | X: 658, Y: 93, W: 2, H: 13 - list index out of range
+
+--- id_image.jpg (Landscape Crop) ---
+Text: ACK | X: 0.2912, Y: 0.0615, W: 0.0266, H: 0.0400
+Text: ID | X: 0.2619, Y: 0.1108, W: 0.0147, H: 0.0400
+Text: Card | X: 0.2830, Y: 0.1108, W: 0.0348, H: 0.0400
+Text: Megersa | X: 0.2701, Y: 0.3415, W: 0.0504, H: 0.0400
+Text: H | X: 0.0137, Y: 0.4062, W: 0.0055, H: 0.0646
+Text: [Date | X: 0.2372, Y: 0.4554, W: 0.0192, H: 0.0246
+Text: Date | X: 0.2454, Y: 0.6646, W: 0.0192, H: 0.0277
+Text: 2026/06/20 | X: 0.1850, Y: 0.7138, W: 0.0632, H: 0.0338

@@ -1,0 +1,17 @@
+--- OCR Analysis (CW) for front_id.jpg ---
+--- OCR Analysis (CCW) for front_id.jpg ---
+--- OCR Analysis (CW) for id_image.jpg ---
+Text: 'ron}' at Y-pos: 19 (0.0585 height)
+Text: '9):2018/06/20' at Y-pos: 68 (0.2092 height)
+Text: 'oat' at Y-pos: 141 (0.4338 height)
+Text: 'of' at Y-pos: 164 (0.5046 height)
+Text: 'ese:' at Y-pos: 180 (0.5538 height)
+Text: '2026/Feb/27' at Y-pos: 199 (0.6123 height)
+--- OCR Analysis (CCW) for id_image.jpg ---
+Text: '|' at Y-pos: 325 (1.0000 height)
+Text: 'mai.' at Y-pos: 220 (0.6769 height)
+Text: 'Zziqeasz0z'e%' at Y-pos: 265 (0.8154 height)
+Text: '1980' at Y-pos: 174 (0.5354 height)
+Text: 'gzi9o/B' at Y-pos: 125 (0.3846 height)
+Text: 'Loz"' at Y-pos: 85 (0.2615 height)
+Text: 'www' at Y-pos: 60 (0.1846 height)

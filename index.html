@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ethiopian Fayda ID Card Generator</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a4a2a 0%, #1a6b3e 40%, #0d5530 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+      padding: 48px 56px;
+      max-width: 540px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .flag-icon {
+      width: 44px;
+      height: 30px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 3px;
+    }
+
+    .flag-icon span {
+      flex: 1;
+      display: block;
+    }
+
+    .flag-icon .g {
+      background: #078930;
+    }
+
+    .flag-icon .y {
+      background: #FCDD09;
+    }
+
+    .flag-icon .r {
+      background: #DA121A;
+    }
+
+    .national-id-logo {
+      width: 40px;
+      height: 40px;
+      background: #1a6b3e;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #1a2e1a;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #6b8a6b;
+      margin-bottom: 8px;
+    }
+
+    .limit-note {
+      font-size: 12px;
+      color: #b08d57;
+      font-weight: 600;
+      margin-bottom: 28px;
+      background: #fffbf0;
+      border: 1px solid #f0d89a;
+      border-radius: 6px;
+      padding: 6px 12px;
+    }
+
+    .upload-zone {
+      border: 2.5px dashed #b0ccb0;
+      border-radius: 12px;
+      padding: 40px 20px;
+      background: #f3faf3;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+
+    .upload-zone:hover {
+      border-color: #1a6b3e;
+      background: #e8f5e8;
+    }
+
+    .upload-zone.dragover {
+      border-color: #1a6b3e;
+      background: #d0ecd0;
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .upload-zone p {
+      font-size: 15px;
+      color: #4a6a4a;
+      margin-bottom: 6px;
+    }
+
+    .upload-zone small {
+      font-size: 12px;
+      color: #8aaa8a;
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .file-list {
+      margin-top: 14px;
+      text-align: left;
+      display: none;
+    }
+
+    .file-list-title {
+      font-size: 12px;
+      color: #888;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f0faf0;
+      border: 1px solid #c0e0c0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #1a6b3e;
+      font-weight: 500;
+    }
+
+    .file-item .icon {
+      font-size: 16px;
+    }
+
+    .file-count-badge {
+      display: inline-block;
+      background: #1a6b3e;
+      color: #fff;
+      border-radius: 12px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+
+    .error-badge {
+      background: #c0392b;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #1a6b3e, #0a9a4a);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .5px;
+      transition: opacity .2s, transform .1s;
+    }
+
+    .btn:hover {
+      opacity: .92;
+    }
+
+    .btn:active {
+      transform: scale(.98);
+    }
+
+    .btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    .error-box {
+      background: #fff0f0;
+      border: 1px solid #f5a0a0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #c0392b;
+      font-size: 14px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .features {
+      margin-top: 28px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .feat-badge {
+      background: #f0faf0;
+      border: 1px solid #b0d8b0;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      color: #3a6a3a;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       POPUP BACKDROP
+    ═══════════════════════════════════════════════════ */
+    .popup-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 22, 12, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .popup-backdrop.active {
+      display: flex;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       POPUP CARD
+    ═══════════════════════════════════════════════════ */
+    .popup-card {
+      background: #fff;
+      border-radius: 20px;
+      width: 360px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(26, 107, 62, .15),
+        0 24px 64px rgba(0, 0, 0, .5),
+        0 8px 24px rgba(0, 0, 0, .3);
+      animation: popupSlideIn .35s cubic-bezier(.22, .68, 0, 1.2) both;
+      position: relative;
+    }
+
+    @keyframes popupSlideIn {
+      from {
+        transform: scale(.82) translateY(24px);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+      }
+    }
+
+    /* coloured top band */
+    .popup-header {
+      background: linear-gradient(135deg, #0a4a2a, #1a6b3e);
+      padding: 28px 28px 24px;
+      position: relative;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    /* animated shimmer on header */
+    .popup-header::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -150%;
+      width: 80%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .12), transparent);
+      animation: header-shine 2.2s ease-in-out infinite;
+    }
+
+    @keyframes header-shine {
+      0% {
+        left: -150%;
+      }
+
+      100% {
+        left: 150%;
+      }
+    }
+
+    /* triple ring inside header */
+    .popup-rings {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 14px;
+    }
+
+    .popup-rings .r {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3.5px solid transparent;
+    }
+
+    .pr1 {
+      border-top-color: rgba(255, 255, 255, .9);
+      animation: spin 1s linear infinite;
+    }
+
+    .pr2 {
+      inset: 10px;
+      border-right-color: #FCDD09;
+      animation: spin .7s linear infinite reverse;
+    }
+
+    .pr3 {
+      inset: 20px;
+      border-bottom-color: rgba(255, 255, 255, .5);
+      animation: spin 1.4s linear infinite;
+    }
+
+    .pr-center {
+      position: absolute;
+      inset: 26px;
+      background: rgba(255, 255, 255, .15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .popup-header-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .popup-header-sub {
+      font-size: 11px;
+      color: rgba(255, 255, 255, .7);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* body section */
+    .popup-body {
+      padding: 22px 24px 26px;
+    }
+
+    /* file count pill */
+    .popup-count-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #e8f5e8;
+      border: 1px solid #b0d8b0;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1a6b3e;
+      margin-bottom: 16px;
+    }
+
+    .count-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #1a6b3e;
+      animation: dot-pulse .8s ease-in-out infinite;
+    }
+
+    @keyframes dot-pulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.5);
+        opacity: .5;
+      }
+    }
+
+    /* progress bar */
+    .popup-bar-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .popup-bar-wrap {
+      height: 6px;
+      background: #e8f5e8;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 18px;
+    }
+
+    .popup-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #078930, #1a6b3e, #0a9a4a);
+      background-size: 200% 100%;
+      border-radius: 4px;
+      width: 0%;
+      animation: fill-bar 3.5s ease-out forwards, bar-shine 1.5s linear infinite;
+    }
+
+    @keyframes fill-bar {
+      0% {
+        width: 0%;
+      }
+
+      25% {
+        width: 40%;
+      }
+
+      60% {
+        width: 70%;
+      }
+
+      85% {
+        width: 86%;
+      }
+
+      100% {
+        width: 92%;
+      }
+    }
+
+    @keyframes bar-shine {
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -200% 0;
+      }
+    }
+
+    /* step list */
+    .popup-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .popup-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1.5px solid transparent;
+      background: #f8faf8;
+      transition: all .4s ease;
+    }
+
+    .popup-step.active {
+      background: #edf7ed;
+      border-color: #b0d8b0;
+      box-shadow: 0 2px 8px rgba(26, 107, 62, .1);
+    }
+
+    .popup-step.done {
+      background: #f5fcf5;
+      border-color: #c8e8c8;
+    }
+
+    .ps-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      background: #eee;
+      transition: background .4s;
+    }
+
+    .popup-step.active .ps-icon {
+      background: #d0ecd0;
+    }
+
+    .popup-step.done .ps-icon {
+      background: #c8e8c8;
+    }
+
+    .ps-info {
+      flex: 1;
+      text-align: left;
+    }
+
+    .ps-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #555;
+      transition: color .4s;
+    }
+
+    .ps-sub {
+      font-size: 10px;
+      color: #aaa;
+      margin-top: 1px;
+    }
+
+    .popup-step.active .ps-title {
+      color: #1a6b3e;
+    }
+
+    .popup-step.done .ps-title {
+      color: #3a7a3a;
+    }
+
+    .ps-status {
+      font-size: 10px;
+      font-weight: 700;
+      color: #bbb;
+      transition: color .4s;
+      flex-shrink: 0;
+    }
+
+    .popup-step.active .ps-status {
+      color: #1a6b3e;
+    }
+
+    .popup-step.done .ps-status {
+      color: #0a9a4a;
+    }
+
+    /* spinning indicator for active step */
+    .ps-spinner {
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #b0d8b0;
+      border-top-color: #1a6b3e;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .popup-step.active .ps-spinner {
+      display: block;
+    }
+
+    .popup-step.done .ps-spinner {
+      display: none;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       RELOAD DIALOG
+    ═══════════════════════════════════════════════════ */
+    .reload-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      backdrop-filter: blur(3px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .reload-backdrop.show {
+      display: flex;
+    }
+
+    .reload-dialog {
+      background: #fff;
+      border-radius: 18px;
+      padding: 36px 40px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, .35);
+      animation: dialogPop .22s cubic-bezier(.17, .67, .36, 1.2) both;
+    }
+
+    @keyframes dialogPop {
+      from {
+        transform: scale(.88);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .reload-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #fff8e1;
+      border: 2px solid #f0d89a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin: 0 auto 18px;
+    }
+
+    .reload-dialog h2 {
+      font-size: 18px;
+      font-weight: 800;
+      color: #1a2e1a;
+      margin-bottom: 10px;
+    }
+
+    .reload-dialog p {
+      font-size: 13px;
+      color: #6b8a6b;
+      line-height: 1.7;
+      margin-bottom: 26px;
+    }
+
+    .reload-dialog p strong {
+      color: #b08d57;
+    }
+
+    .reload-btns {
+      display: flex;
+      gap: 10px;
+    }
+
+    .reload-btn-stay {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #1a6b3e, #0a9a4a);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+
+    .reload-btn-stay:hover {
+      opacity: .88;
+    }
+
+    .reload-btn-leave {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1.5px solid #d0d8d0;
+      background: #fff;
+      color: #555;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+
+    .reload-btn-leave:hover {
+      border-color: #c0392b;
+      color: #c0392b;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════ LOADER POPUP ═══════════════════════ -->
+  <div class="popup-backdrop" id="popupBackdrop">
+    <div class="popup-card">
+
+      <!-- coloured header with spinning rings -->
+      <div class="popup-header">
+        <div class="popup-rings">
+          <div class="r pr1"></div>
+          <div class="r pr2"></div>
+          <div class="r pr3"></div>
+          <div class="pr-center">📄</div>
+        </div>
+        <div class="popup-header-title">Processing ID Cards</div>
+        <div class="popup-header-sub" id="progressNote">Starting…</div>
+      </div>
+
+      <!-- body -->
+      <div class="popup-body">
+
+        <!-- file count pill -->
+        <div style="text-align:center">
+          <div class="popup-count-pill">
+            <div class="count-dot"></div>
+            <span id="popupFileCount">0 files</span>
+          </div>
+        </div>
+
+        <!-- progress bar -->
+        <div class="popup-bar-label">
+          <span>Progress</span>
+          <span id="popupPct">0%</span>
+        </div>
+        <div class="popup-bar-wrap">
+          <div class="popup-bar-fill" id="popupBarFill"></div>
+        </div>
+
+        <!-- steps -->
+        <div class="popup-steps">
+          <div class="popup-step active" id="ps1">
+            <div class="ps-icon">📖</div>
+            <div class="ps-info">
+              <div class="ps-title">Reading PDF files</div>
+              <div class="ps-sub">Parsing document structure</div>
+            </div>
+            <div class="ps-spinner"></div>
+            <div class="ps-status">In progress</div>
+          </div>
+          <div class="popup-step" id="ps2">
+            <div class="ps-icon">🔍</div>
+            <div class="ps-info">
+              <div class="ps-title">Extracting ID data</div>
+              <div class="ps-sub">OCR + field recognition</div>
+            </div>
+            <div class="ps-spinner"></div>
+            <div class="ps-status">Waiting</div>
+          </div>
+          <div class="popup-step" id="ps3">
+            <div class="ps-icon">🪪</div>
+            <div class="ps-info">
+              <div class="ps-title">Generating cards</div>
+              <div class="ps-sub">Building ID card layout</div>
+            </div>
+            <div class="ps-spinner"></div>
+            <div class="ps-status">Waiting</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════ RELOAD DIALOG ═══════════════════════ -->
+  <div class="reload-backdrop" id="reloadBackdrop">
+    <div class="reload-dialog">
+      <div class="reload-icon">⚠️</div>
+      <h2>Leave this page?</h2>
+      <p>
+        You have <strong id="dialogFileCount">files selected</strong>.<br>
+        Reloading will clear your selection and progress will be lost.
+      </p>
+      <div class="reload-btns">
+        <button class="reload-btn-stay" onclick="stayOnPage()">Stay on page</button>
+        <button class="reload-btn-leave" onclick="leavePage()">Leave anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════ MAIN CARD ═══════════════════════ -->
+  <div class="card">
+    <div class="logo-row">
+      <div class="flag-icon">
+        <span class="g"></span><span class="y"></span><span class="r"></span>
+      </div>
+      <h1>Ethiopian Fayda ID</h1>
+      <div class="national-id-logo">🪪</div>
+    </div>
+    <p class="subtitle">Upload Ethiopian Digital ID PDFs to generate cards</p>
+    <p class="limit-note">📄 Upload up to 100 PDFs — all cards on one page</p>
+
+    {% if error %}
+    <div class="error-box">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('multi') }}" enctype="multipart/form-data" id="uploadForm">
+      <div class="upload-zone" id="dropZone">
+        <div class="upload-icon">📄</div>
+        <p>Drop your Fayda PDFs here</p>
+        <small>or click to browse — select up to 100 files</small>
+        <input type="file" name="pdf" accept="application/pdf" id="fileInput" multiple>
+      </div>
+
+      <div class="file-list" id="fileList">
+        <div class="file-list-title">Selected files <span class="file-count-badge" id="fileCount">0</span></div>
+        <div id="fileItems"></div>
+      </div>
+
+      <button class="btn" type="submit" id="submitBtn" disabled>Generate ID Cards</button>
+    </form>
+
+    <div style="margin-top: 24px; border-top: 1px solid #eee; padding-top: 20px;">
+      <a href="/" style="color: #1a6b3e; text-decoration: none; font-size: 14px; font-weight: 600;">← Back to Image
+        Processor</a>
+    </div>
+
+  </div>
+
+  <script>
+    const input = document.getElementById('fileInput');
+    const btn = document.getElementById('submitBtn');
+    const fileList = document.getElementById('fileList');
+    const fileItems = document.getElementById('fileItems');
+    const fileCount = document.getElementById('fileCount');
+    const drop = document.getElementById('dropZone');
+    const MAX = 100;
+
+    let hasFiles = false;
+    let isSubmitting = false;
+    let pendingNav = null;
+
+    // ── File display ──────────────────────────────────────────
+    function updateFileDisplay(files) {
+      fileItems.innerHTML = '';
+      const count = Math.min(files.length, MAX);
+      const tooMany = files.length > MAX;
+
+      fileCount.textContent = count + (tooMany ? ` (max ${MAX})` : '');
+      fileCount.className = 'file-count-badge' + (tooMany ? ' error-badge' : '');
+
+      for (let i = 0; i < count; i++) {
+        const d = document.createElement('div');
+        d.className = 'file-item';
+        d.innerHTML = `<span class="icon">📄</span> ${files[i].name}`;
+        fileItems.appendChild(d);
+      }
+
+      fileList.style.display = 'block';
+      btn.disabled = count === 0;
+      hasFiles = count > 0;
+      if (count > 0) btn.textContent = `Generate ${count} ID Card${count > 1 ? 's' : ''}`;
+
+      document.getElementById('dialogFileCount').textContent =
+        `${count} file${count !== 1 ? 's' : ''} selected`;
+    }
+
+    input.addEventListener('change', () => {
+      if (input.files.length) updateFileDisplay(input.files);
+    });
+
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.classList.remove('dragover');
+      const transfer = new DataTransfer();
+      const limit = Math.min(e.dataTransfer.files.length, MAX);
+      for (let i = 0; i < limit; i++) transfer.items.add(e.dataTransfer.files[i]);
+      input.files = transfer.files;
+      updateFileDisplay(transfer.files);
+    });
+
+    // ── Submit: show popup ────────────────────────────────────
+    document.getElementById('uploadForm').addEventListener('submit', e => {
+      if (input.files.length > MAX) {
+        e.preventDefault();
+        alert(`Please select a maximum of ${MAX} PDF files.`);
+        return;
+      }
+
+      isSubmitting = true;
+      btn.textContent = 'Processing…';
+      btn.disabled = true;
+
+      const count = input.files.length;
+
+      // populate popup info
+      document.getElementById('popupFileCount').textContent =
+        `${count} file${count !== 1 ? 's' : ''}`;
+      document.getElementById('progressNote').textContent =
+        `Processing ${count} PDF${count > 1 ? 's' : ''}…`;
+
+      // show popup
+      document.getElementById('popupBackdrop').classList.add('active');
+
+      // restart bar animation
+      const bar = document.getElementById('popupBarFill');
+      bar.style.animation = 'none';
+      bar.offsetHeight;   // reflow
+      bar.style.animation = '';
+
+      // animate percentage counter
+      const pct = document.getElementById('popupPct');
+      const targets = [40, 70, 86, 92];
+      const delays = [400, 900, 1700, 2800];
+      delays.forEach((d, i) => {
+        setTimeout(() => { pct.textContent = targets[i] + '%'; }, d);
+      });
+
+      // animate steps
+      const steps = ['ps1', 'ps2', 'ps3'];
+      const labels = ['In progress', 'In progress', 'In progress'];
+
+      function activateStep(i) {
+        if (i > 0) {
+          const prev = document.getElementById(steps[i - 1]);
+          prev.classList.remove('active');
+          prev.classList.add('done');
+          prev.querySelector('.ps-status').textContent = '✓ Done';
+        }
+        const cur = document.getElementById(steps[i]);
+        cur.classList.add('active');
+        cur.querySelector('.ps-status').textContent = labels[i];
+      }
+
+      activateStep(0);
+      setTimeout(() => activateStep(1), 900);
+      setTimeout(() => activateStep(2), 1900);
+    });
+
+    // ── Reload guard ──────────────────────────────────────────
+    window.addEventListener('beforeunload', e => {
+      if (hasFiles && !isSubmitting) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    document.addEventListener('keydown', e => {
+      const isReload = e.key === 'F5' || (e.key === 'r' && (e.ctrlKey || e.metaKey));
+      if (isReload && hasFiles && !isSubmitting) {
+        e.preventDefault();
+        pendingNav = 'reload';
+        document.getElementById('reloadBackdrop').classList.add('show');
+      }
+    });
+
+    function stayOnPage() {
+      pendingNav = null;
+      document.getElementById('reloadBackdrop').classList.remove('show');
+    }
+
+    function leavePage() {
+      document.getElementById('reloadBackdrop').classList.remove('show');
+      isSubmitting = true;
+      if (pendingNav === 'reload') location.reload();
+      pendingNav = null;
+    }
+
+    document.getElementById('reloadBackdrop').addEventListener('click', e => {
+      if (e.target === e.currentTarget) stayOnPage();
+    });
+  </script>
+</body>
+
+</html>

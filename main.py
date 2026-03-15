@@ -5,6 +5,7 @@ from pyzbar.pyzbar import decode
 from jinja2 import Template
 import re
 import os
+from PIL import Image, ImageEnhance
 
 
 
@@ -367,27 +368,98 @@ def crop(img, y1,y2,x1,x2):
     return img[y1:y2,x1:x2]
 
 
+import cv2
+import numpy as np
+from pyzbar.pyzbar import decode
+
 # -----------------------------
 # 7. EXTRACT ASSETS (PORTRAIT & QR)
 # -----------------------------
-def extract_assets(qr_id_path_or_img):
-    """
-    Crops portrait and QR from qr_id image.
-    Returns (portrait_data, qr_data).
-    """
-    img = load_image(qr_id_path_or_img)
-    
-    # Adjusted slightly higher from 305 to 280
-    portrait = crop(img, 280, 580, 150, 430)
-    # We will return the encoded image data instead of just saving it
-    _, portrait_encoded = cv2.imencode('.png', portrait)
-    
-    # QR crop - keeping exactly as it was in the "perfect" version
-    qr_img = crop(img, 725, 1050, 150, 426)
-    _, qr_encoded = cv2.imencode('.png', qr_img)
-    
-    return portrait_encoded, qr_encoded
 
+def extract_assets(qr_id_path_or_img):
+    img = cv2.imread(qr_id_path_or_img) if isinstance(qr_id_path_or_img, str) else qr_id_path_or_img
+    if img is None:
+        return None, None
+
+    height, width = img.shape[:2]
+
+    # ---------------------------
+    # QR DETECTION
+    # ---------------------------
+    decoded_qrs = decode(img)
+    qr_top = height
+    qr_img_crop = None
+
+    if decoded_qrs:
+        qr = decoded_qrs[0]
+        x, y, w, h = qr.rect
+        margin = 15
+        y1, y2 = max(0, y - margin), min(height, y + h + margin)
+        x1, x2 = max(0, x - margin), min(width, x + w + margin)
+        qr_img_crop = img[y1:y2, x1:x2]
+        qr_top = y1
+    else:
+        # Better dynamic fallback for QR if not found
+        qr_img_crop = img[int(height*0.6):int(height*0.95), int(width*0.2):int(width*0.8)]
+        qr_top = int(height*0.6)
+
+    # ---------------------------
+    # FACE DETECTION (Replaces Rectangle Finder)
+    # ---------------------------
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Use OpenCV's built-in face detector
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(100, 100))
+
+    portrait_raw = None
+
+    if len(faces) > 0:
+        # Pick the face that is highest up (above the QR code) and largest
+        valid_faces = [f for f in faces if f[1] < qr_top]
+        if valid_faces:
+            # Sort by size (area)
+            valid_faces = sorted(valid_faces, key=lambda f: f[2]*f[3], reverse=True)
+            xf, yf, wf, hf = valid_faces[0]
+
+            # Add padding to get the whole head, not just the face "mask"
+            # Balanced ID-style crop
+        pad_w = int(wf * 0.40)
+
+        top_pad = int(hf * 0.35)       # keep some space above head
+        bottom_pad = int(hf * 1.0)    # include shoulders
+
+        y1 = max(0, yf - top_pad)
+        y2 = min(qr_top, yf + hf + bottom_pad)
+
+        x1 = max(0, xf - pad_w)
+        x2 = min(width, xf + wf + pad_w)
+
+        portrait_raw = img[y1:y2, x1:x2]
+
+    # Fallback if no face detected
+    if portrait_raw is None:
+        # Default to the upper-center area where portraits usually sit
+        portrait_raw = img[int(height*0.1):int(qr_top*0.9), int(width*0.1):int(width*0.5)]
+
+    # ---------------------------
+    # BACKGROUND REMOVE (Clean edges)
+    # ---------------------------
+    portrait_bgra = cv2.cvtColor(portrait_raw, cv2.COLOR_BGR2BGRA)
+    
+    # Increased sensitivity for white background removal
+    lower_white = np.array([220, 220, 220])
+    upper_white = np.array([255, 255, 255])
+    mask = cv2.inRange(portrait_raw, lower_white, upper_white)
+    portrait_bgra[mask == 255] = (0, 0, 0, 0)
+
+    # ---------------------------
+    # ENCODE
+    # ---------------------------
+    _, p_enc = cv2.imencode('.png', portrait_bgra)
+    _, q_enc = cv2.imencode('.png', qr_img_crop)
+
+    return p_enc, q_enc
 
 # -----------------------------
 # 8. EXTRACT FRONT DATA
@@ -508,6 +580,10 @@ def extract_front(image, qr_data=None):
     # -----------------------------
     # proc_full is already prepared at 2x scale
     h_proc, w_proc = proc_full.shape[:2]
+
+
+    
+
 
     # --- Name Processing ---
     name_words = buckets["name"]
@@ -782,6 +858,106 @@ def extract_front(image, qr_data=None):
             # Otherwise, we keep the OCR as requested ("exact as image")
             # unless the OCR has suspicious characters
     
+    # ── 8. VERTICAL ISSUE DATE EXTRACTION (Unified Dynamic Layout) ──
+    h_img, w_img = image.shape[:2]
+    is_portrait = h_img > w_img
+    
+    # 8.1 Define search areas based on aspect ratio
+    # Screenshots are portrait, cards are landscape
+    if is_portrait:
+        areas = [
+            {'x0': int(w_img * 0.82), 'x1': int(w_img * 0.96), 'side': 'right'},
+            {'x0': int(w_img * 0.01), 'x1': int(w_img * 0.15), 'side': 'left'} # fallback
+        ]
+    else:
+        areas = [
+            {'x0': int(w_img * 0.01), 'x1': int(w_img * 0.15), 'side': 'left'},
+            {'x0': int(w_img * 0.85), 'x1': int(w_img * 0.99), 'side': 'right'} # fallback
+        ]
+        
+    # 8.2 Side detection (Primary only, no more debug saves)
+    if is_portrait:
+        area = {'x0': int(w_img * 0.82), 'x1': int(w_img * 0.98)}
+    else:
+        area = {'x0': int(w_img * 0.01), 'x1': int(w_img * 0.16)}
+    
+    best_strip = image[0:h_img, area['x0']:area['x1']]
+    
+    if best_strip is not None and best_strip.size > 0:
+        h_s, w_s = best_strip.shape[:2]
+        greg_y, eth_y = None, None
+        
+        # Multi-rotation OCR to find markers (with safety)
+        for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
+            try:
+                rotated = cv2.rotate(best_strip, rot_code)
+                s_data = pytesseract.image_to_data(rotated, output_type=pytesseract.Output.DICT)
+                for i in range(len(s_data['text'])):
+                    txt = s_data['text'][i].strip()
+                    if len(txt) < 3: continue
+                    if re.search(r'\b(19\d{2}|20\d{2})\b', txt):
+                        # Map back to original Y
+                        if rot_code == cv2.ROTATE_90_CLOCKWISE:
+                            y_val = h_s - s_data['left'][i]
+                        else:
+                            y_val = s_data['top'][i] # Wait, rotated CCW is (x,y) -> (y, ws-1-x)
+                            # Actually, cleaner to just use fallbacks if marker is tricky
+                            y_val = h_s - s_data['left'][i] if rot_code == cv2.ROTATE_90_CLOCKWISE else s_data['left'][i]
+                        
+                        year = int(re.search(r'\b(19\d{2}|20\d{2})\b', txt).group(1))
+                        # Identify label context
+                        if any(m in txt.lower() for m in ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]):
+                            greg_y = y_val
+                        elif year > 2024: greg_y = y_val
+                        else: eth_y = y_val
+                if greg_y is not None or eth_y is not None: break
+            except: pass
+        
+        # Reliable fallbacks
+        if greg_y is None: greg_y = int(h_s * (0.22 if is_portrait else 0.65))
+        if eth_y is None: eth_y = int(h_s * (0.35 if is_portrait else 0.30))
+            
+        pad = int(h_s * 0.08) # 8% height padding
+        crop_g = best_strip[max(0, greg_y - pad):min(h_s, greg_y + pad), :]
+        crop_e = best_strip[max(0, eth_y - pad):min(h_s, eth_y + pad), :]
+
+        def process_vertical_crop(c):
+            if c is None or c.size == 0: return None
+            c_res = cv2.resize(c, (20, 110), interpolation=cv2.INTER_LANCZOS4)
+            pil = Image.fromarray(cv2.cvtColor(c_res, cv2.COLOR_BGR2RGB))
+            pil = ImageEnhance.Contrast(pil).enhance(2.8)
+            pil = ImageEnhance.Sharpness(pil).enhance(3.0)
+            return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+
+        # Gregorian Processing
+        ig_proc = process_vertical_crop(crop_g)
+        if ig_proc is not None:
+            _, buffer = cv2.imencode('.png', ig_proc)
+            data["issue_greg_encoded"] = buffer
+            try:
+                # OCR Fallback
+                for rc in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
+                    rot = cv2.rotate(crop_g, rc)
+                    ocr = pytesseract.image_to_string(rot, lang="eng", config='--psm 7').strip()
+                    if re.search(r'\d', ocr): 
+                        data["issue_greg"] = ocr
+                        break
+            except: pass
+
+        # Ethiopic Processing
+        ie_proc = process_vertical_crop(crop_e)
+        if ie_proc is not None:
+            _, buffer = cv2.imencode('.png', ie_proc)
+            data["issue_eth_encoded"] = buffer
+            try:
+                for rc in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
+                    rot = cv2.rotate(crop_e, rc)
+                    ocr = pytesseract.image_to_string(rot, lang="amh+eng", config='--psm 7').strip()
+                    if re.search(r'\b\d{2}/\d{2}/\d{2,4}\b|\b\d{2}-\d{2}-\d{2,4}\b', ocr):
+                        data["issue_eth"] = ocr
+                        break
+            except: pass
+
     return data
 
 
@@ -795,7 +971,7 @@ def extract_back(image):
     full_back_proc = preprocess(image)
     if full_back_proc is None: return data
     full_back_ocr = pytesseract.image_to_data(full_back_proc, lang="eng+amh", output_type=pytesseract.Output.DICT)
-
+    
     # 1. Phone Number
     phone_label_y = None
     for i in range(len(full_back_ocr['text'])):
@@ -1007,17 +1183,15 @@ def merge(front=None,back=None,qr=None):
 # 10. EXPORT HTML
 # -----------------------------
 def export_html(data):
-    """
-    Renders the result.html template with the extracted data.
-    """
+
     try:
         with open("result.html", "r", encoding="utf-8") as f:
             template_content = f.read()
     except:
-        print("result.html not found, falling back to simple output.")
+        print("result.html not found.")
         return
 
-    # Smart fallback for the 16-digit number
+    # Find ID
     actual_id = "—"
     for k in ["id_number", "fan", "barcode_data"]:
         val = data.get(k)
@@ -1025,8 +1199,35 @@ def export_html(data):
             actual_id = val
             break
 
-    # Mock cards data for result.html
-    # It expects: cards: [{ photo: '', photo_warm: '', qr: '', data: { ... } }]
+    # -----------------------------
+    # CALCULATE ISSUE DATE
+    # -----------------------------
+    from datetime import datetime
+
+    expiry_greg = data.get("expiry_greg") or data.get("expiry") or "—"
+    expiry_eth = data.get("expiry_eth", "—")
+
+    issue_greg = "—"
+    issue_eth = "—"
+
+    try:
+        if expiry_greg != "—":
+            d = datetime.strptime(expiry_greg, "%Y-%m-%d")
+            issue_greg = d.replace(year=d.year - 5).strftime("%Y-%m-%d")
+    except:
+        pass
+
+    try:
+        if expiry_eth != "—":
+            parts = expiry_eth.split("-")
+            parts[0] = str(int(parts[0]) - 5)
+            issue_eth = "-".join(parts)
+    except:
+        pass
+
+    # -----------------------------
+    # CARD DATA
+    # -----------------------------
     cards = [{
         "photo": "portrait.png",
         "photo_warm": "portrait.png",
@@ -1038,30 +1239,35 @@ def export_html(data):
             "dob_eth": data.get("dob_eth", "—"),
             "sex_en": data.get("sex_en", ""),
             "sex_am": data.get("sex_am", ""),
-            "expiry_greg": data.get("expiry_greg") or data.get("expiry") or data.get("expiry_eth") or "—",
-            "expiry_eth": data.get("expiry_eth", "—"),
+
+            "expiry_greg": expiry_greg,
+            "expiry_eth": expiry_eth,
+
+            "issue_greg_date": issue_greg,
+            "issue_eth_date": issue_eth,
+
             "fcn": actual_id,
             "fin": data.get("fin", "—"),
             "barcode_data": actual_id,
             "phone": data.get("phone", ""),
+
             "nat_en": "Ethiopian",
             "nat_am": "ኢትዮጵያዊ",
+
             "reg_en": data.get("reg_en", ""),
             "reg_am": data.get("reg_am", ""),
             "zone_en": data.get("zone_en", ""),
             "zone_am": data.get("zone_am", ""),
             "woreda_en": data.get("woreda_en", ""),
             "woreda_am": data.get("woreda_am", ""),
-            "fin_image": "", # Placeholders
-            "expiry_image": "",
-            "issue_greg_image": "",
-            "issue_eth_image": ""
+
+            "fin_image": "",
+            "expiry_image": ""
         }
     }]
 
     template = Template(template_content)
-    
-    # Mock url_for for Jinja2
+
     def mock_url_for(endpoint, **values):
         return values.get('filename', '')
 
@@ -1069,8 +1275,8 @@ def export_html(data):
 
     with open("final_id_result.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("Exported to final_id_result.html")
 
+    print("Exported to final_id_result.html")
 
 # -----------------------------
 # 12. MAIN PROCESS FUNCTION
@@ -1110,21 +1316,41 @@ def process_screenshots(front_img, back_img, qr_img):
 # -----------------------------
 if __name__ == "__main__":
 
-    # Specific screenshots provided by user
-    front = "front_id.jpg"
-    back = "back_id.jpg"
-    qr_id = "qr_id.jpg"
+    cards = []
 
-    if all(os.path.exists(f) for f in [front, back, qr_id]):
-        data = process_screenshots(front, back, qr_id)
-        # Avoid print encoding issues with Amharic
-        try:
-            print({k: v if isinstance(v, str) and not any(ord(c) > 127 for c in v) else "..." for k, v in data.items()})
-        except:
-            pass
-        export_html(data)
+    # Process up to 5 cards
+    for i in range(1, 6):
+
+        front = f"front_{i}.jpg"
+        back = f"back_{i}.jpg"
+        qr_id = f"qr_{i}.jpg"
+
+        if all(os.path.exists(f) for f in [front, back, qr_id]):
+
+            print(f"Processing Card {i}...")
+
+            try:
+                data = process_screenshots(front, back, qr_id)
+
+                # Avoid print encoding issues with Amharic
+                safe_print = {
+                    k: v if isinstance(v, str) and not any(ord(c) > 127 for c in v) else "..."
+                    for k, v in data.items()
+                }
+
+                print(safe_print)
+
+                cards.append(data)
+
+            except Exception as e:
+                print(f"Card {i} failed:", e)
+
+    # Export results
+    if cards:
+        for idx, card in enumerate(cards, start=1):
+            export_html(card)
     else:
-        # Fallback to general processing if screenshots not found
+        # Fallback single-image processing
         image_path = "id_image.jpg"
         if os.path.exists(image_path):
             data = process_image([image_path])

@@ -1,0 +1,8 @@
+--- OCR Analysis for front_id.jpg ---
+--- OCR Analysis for id_image.jpg ---
+Text: 'ron}' at Y-pos: 19 (0.0585 height)
+Text: '9):2018/06/20' at Y-pos: 68 (0.2092 height)
+Text: 'oat' at Y-pos: 141 (0.4338 height)
+Text: 'of' at Y-pos: 164 (0.5046 height)
+Text: 'ese:' at Y-pos: 180 (0.5538 height)
+Text: '2026/Feb/27' at Y-pos: 199 (0.6123 height)

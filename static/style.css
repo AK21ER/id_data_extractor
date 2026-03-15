@@ -255,6 +255,25 @@ header {
     background: rgba(99, 102, 241, 0.1);
 }
 
+.pdf-btn-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    transition: all 0.3s;
+    font-weight: 500;
+}
+
+.pdf-btn-nav:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-blue);
+    transform: translateY(-2px);
+}
+
 /* Button */
 .primary-btn {
     width: 100%;

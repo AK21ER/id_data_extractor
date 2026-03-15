@@ -1,0 +1,4 @@
+Variance in debug_left_1.jpg: 73.71
+Variance in debug_left_2.jpg: 364.58
+Variance in debug_right_1.jpg: 224.42
+Variance in debug_right_2.jpg: 283.29
