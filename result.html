@@ -277,52 +277,50 @@
     }
 
     /* ── ISSUE DATE STRIP ── */
-    /* ── ISSUE DATE STRIP ── */
-    /* ── ISSUE DATE STRIP ── */
     .issue-strip {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 16px;
-      height: 100%;
-      z-index: 2;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 16px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 2;
+}
 
-    .issue-half {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      flex: 1;
-      gap: 30px;
-      padding: 12px 0;
-    }
+.issue-half {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+   
+}
 
-    .issue-half+.issue-half {
-      border-top: 1px solid rgba(176, 141, 87, 0.3);
-    }
+.issue-date {
+    font-size: 8px;
+    font-weight: 700;
+    color: #000;
+    writing-mode: horizontal-tb; /* keep the date horizontal */
+    text-align: center;
+}
 
-    .issue-label {
-      display: inline-block;
-      font-size: 8px;
-      font-weight: 700;
-      letter-spacing: 0.8px;
-      color: #de9425;
-      transform: rotate(-90deg);
-      transform-origin: center;
-      white-space: nowrap;
-    }
+.issue-label {
+    display: inline-block;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #de9425;
+    white-space: nowrap;
+}
 
-    .issue-half img {
-      display: block;
-      width: 11px;
-      height: 70px;
-      object-fit: contain;
-    }
+/* Make only the Ethiopic label vertical */
+.vertical-label {
+    writing-mode: vertical-rl;   /* vertical top-to-bottom */
+    transform: rotate(180deg);    /* flip to read naturally */
+    white-space: nowrap;
+}
 
     @media print {
       .issue-strip {
@@ -389,22 +387,16 @@
     }
 
     /* ── PHOTO ── */
-    .portrait-main {
-      position: absolute;
-      top: 75px;
-      left: 22px;
-      width: 148px;
-      height: 200px;
-      overflow: hidden;
-    }
-
-    .portrait-main img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: center top;
-      transition: filter 0.4s ease;
-    }
+   .portrait-main{
+  position:absolute; top:75px; left:22px;
+  width:148px; height:200px; overflow:hidden;
+}
+.portrait-main img{
+  width:100%; height:100%;
+  object-fit:cover; object-position:center top;
+  transition: filter 0.4s ease;
+  opacity:0.7;
+}
 
     body.warm-mode .portrait-main img,
     body.warm-mode .portrait-small img {
@@ -673,6 +665,27 @@
         display: none !important;
       }
     }
+    .issue-half {
+    display: flex;
+    align-items: center; /* vertically centers the date and label */
+    gap: 10px;           /* spacing between date and label */
+}
+
+.vertical-text {
+    writing-mode: vertical-rl; /* makes text vertical */
+    transform: rotate(180deg); /* flip to read top-to-bottom */
+    white-space: nowrap;       /* keep in one line */
+    letter-spacing: 0.2px;    /* optional spacing */
+}
+.vertical-label {
+    writing-mode: vertical-rl;  /* vertical top-to-bottom */
+    transform: rotate(180deg);   /* flip so it reads naturally */
+    white-space: nowrap;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #de9425;
+}
   </style>
 </head>
 
@@ -727,23 +740,57 @@
       <div class="id-card front">
         <img class="card-bg" src="{{ url_for('static', filename='image/front_back.png') }}">
 
-        <div class="issue-strip">
-          <div class="issue-half" style="justify-content:flex-end;">
-            {% if card.data.issue_greg_image %}
-            <img src="{{ card.data.issue_greg_image }}" alt="Gregorian date">
-            {% endif %}
-            <span class="issue-label" style="letter-spacing:0.2px;">Date of Issue</span>
-          </div>
-          <div class="issue-half" style="justify-content:flex-start;">
-            {% if card.data.issue_eth_image %}
-            <img src="{{ card.data.issue_eth_image }}" alt="Ethiopian date">
-            {% endif %}
-            <span class="issue-label">የተሰጠበት ቀን</span>
-          </div>
-        </div>
+<style>
+.vertical-label{
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing:0;
+    word-spacing:0;
+    white-space:nowrap;
+}
+</style>
 
+<div class="issue-strip">
+    <div class="issue-half">
+        <span class="issue-label vertical-label" style="color:#000" id="issue-greg"></span>
+        <span class="issue-label vertical-label">Date of Issue</span>
+    </div>
 
+    <div class="issue-half">
+        <span class="issue-label vertical-label" style="color:#000" id="issue-eth"></span>
+        <span class="issue-label vertical-label">የተሰጠበት ቀን</span>
+    </div>
+</div>
 
+<script>
+  // Get expiry dates from your template
+  let expiryGreg = "{{ card.data.expiry_greg or '—' }}"; // e.g., "2026-03-16"
+  let expiryEth = "{{ card.data.expiry_eth or '—' }}";   // e.g., "2018-07-08"
+
+  // ---- Gregorian Issue Date ----
+  let issueGreg = "—";
+  if (expiryGreg !== "—") {
+      let d = new Date(expiryGreg);
+      d.setFullYear(d.getFullYear() - 8); // Subtract 5 years
+      // Format back to YYYY-MM-DD
+      issueGreg = d.toISOString().split('T')[0];
+  }
+
+  document.getElementById("issue-greg").textContent = issueGreg;
+
+  // ---- Ethiopic Issue Date ----
+  // If your Ethiopic date is in "YYYY/MM/DD" or similar numeric format
+  let issueEth = "—";
+  if (expiryEth !== "—") {
+      let parts = expiryEth.split(/[-\/]/); // Split by - or /
+      if (parts.length === 3) {
+          let year = parseInt(parts[0], 10) - 8; // Subtract 5 years
+          issueEth = [year, parts[1], parts[2]].join("/"); // Keep month/day same
+      }
+  }
+
+  document.getElementById("issue-eth").textContent = issueEth;
+</script>
         <div class="portrait-main">
           {% if card.photo %}
           <img class="card-photo" src="{{ card.photo }}" data-orig="{{ card.photo }}" data-warm="{{ card.photo_warm }}"
@@ -785,12 +832,7 @@
               {{ card.data.expiry_eth or '—' }} | {{ card.data.expiry_greg or '—' }}
             </div>
           </div>
-          <div class="field">
-            <span class="label">የተሰጠበት ቀን | Date of Issue</span>
-            <div class="val-inline">
-              {{ card.data.issue_eth or '—' }} | {{ card.data.issue_greg or '—' }}
-            </div>
-          </div>
+          
         </div>
 
         <div class="barcode-section">
@@ -871,7 +913,7 @@
         </div>
         <div class="footer-text">
           ይህ መታወቂያ ጠፍቶ ካገኙ በአቅራቢያዎ ላለ ፖሊስ ጣቢያ ወይም ለተቋሙ ያስረክቡ::
-                   ለተጨማሪ 9779 ላይ ይደዉሉ ወይም id.et/cardprint ይጎብኙ።<br>
+           ለተጨማሪ 9779 ላይ ይደዉሉ ወይም id.et/cardprint ይጎብኙ።<br>
           If lost and found, please return to nearby police station or to the institution.
           Call 9779 or visit id.et/cardprint for more.
         </div>

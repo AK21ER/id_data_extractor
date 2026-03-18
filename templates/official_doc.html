@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ethiopian Digital ID - Official Document</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            font-family: 'Outfit', 'Noto Sans Ethiopic', sans-serif;
+            display: flex;
+            justify-content: center;
+            padding-top: 40px;
+        }
+
+        .document-container {
+            width: 1100px;
+            height: 1555px;
+            background-image: url("static/image/official_bg.png");
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            position: relative;
+            background-color: #fff;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Common style for overlays */
+        .overlay {
+            position: absolute;
+            /* border: 1px solid rgba(255,0,0,0.2); # Debug */
+        }
+
+        /* Portrait */
+        .portrait-overlay {
+            top: 180px;
+            left: 85px;
+            width: 147px;
+            height: 198px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #fff;
+        }
+
+        .portrait-overlay img {
+            display: none;
+        }
+
+        /* FCN Box */
+        .fcn-overlay {
+            top: 380px;
+            left: 104px;
+            width: 200px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 10px;
+            font-size: 16px;
+            font-weight: 900;
+            color: #000;
+            letter-spacing: 1px;
+        }
+
+        /* Name Stack */
+        .name-stack-overlay {
+            top: 370px;
+            left: 285px;
+            width: 380px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .name-am {
+            font-size: 18px;
+            font-weight: 800;
+            color: #000;
+        }
+
+        .name-en {
+            font-size: 18px;
+            font-weight: 700;
+            color: #000;
+        }
+
+        /* Demographic Data */
+        .data-overlay {
+            font-size: 15.5px;
+            font-weight: 800;
+            color: #000;
+        }
+
+        /* Recalibrated top offsets (shifted down) */
+        .dob-val {
+            top: 500px;
+            left: 100px;
+        }
+
+        .region-val {
+            top: 500px;
+            left: 380px;
+        }
+
+        .sex-val {
+            top: 565px;
+            left: 100px;
+        }
+
+        .subcity-val {
+            top: 565px;
+            left: 380px;
+        }
+
+        .nat-val {
+            top: 630px;
+            left: 100px;
+        }
+
+        .woreda-val {
+            top: 630px;
+            left: 380px;
+        }
+
+        .phone-val {
+            top: 700px;
+            left: 100px;
+        }
+
+        /* Main QR focal brackets area */
+        .qr-main-overlay {
+            top: 750px;
+            left: 175px;
+            width: 320px;
+            height: 320px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .qr-main-overlay img {
+            width: 95%;
+            height: 95%;
+            object-fit: contain;
+        }
+
+        /* Right Column Cards */
+        .card-preview-overlay {
+            width: 350px;
+            height: 420px;
+            overflow: hidden;
+            background: #fff;
+            border-radius: 4px;
+        }
+
+        .card-preview-overlay img {
+            display: none;
+        }
+
+        .front-card-pos {
+            top: 190px;
+            right: 40px;
+        }
+
+        .back-card-pos {
+            top: 660px;
+            right: 40px;
+        }
+
+        /* Download Button Styling */
+        .download-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 15px 25px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Hide button during PDF generation */
+        @media print {
+            .download-btn {
+                display: none !important;
+            }
+        }
+    </style>
+    <!-- Include html2pdf.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body>
+    {% for card in cards %}
+    <div class="document-container">
+        <!-- Portrait -->
+        <div class="overlay portrait-overlay"
+            style="background-image: url('{{ card.photo }}'); background-size: cover; background-position: center; background-repeat: no-repeat;">
+        </div>
+
+        <!-- FCN -->
+        <div class="overlay fcn-overlay">
+            {{ card.data.fcn }}
+        </div>
+
+        <!-- Name Stack -->
+        <div class="overlay name-stack-overlay" style="top: 367px; left: 290px;">
+            <div class="name-am" style="height: 48px; display: flex; align-items: center;">
+                {% if card.data.name_am_image %}
+                <img src="{{ card.data.name_am_image }}"
+                    style="height: 100%; width: auto; max-width: 650px; object-fit: contain; filter: contrast(1.1);">
+                {% else %}
+                <div style="font-size: 32px; font-weight: 800; color: #000;">{{ card.data.name_am }}</div>
+                {% endif %}
+            </div>
+            <div class="name-en" style="font-size: 24px; font-weight: 700; color: #000; margin-top: 5px;">
+                {{ card.data.name_en }}
+            </div>
+        </div>
+
+        <!-- Demographic Fields -->
+        <div class="overlay data-overlay dob-val">{{ card.data.dob_greg }} | {{ card.data.dob_eth }}</div>
+        <div class="overlay data-overlay region-val">{{ card.data.reg_en }}</div>
+        <div class="overlay data-overlay sex-val">{{ card.data.sex_am }} | {{ card.data.sex_en }}</div>
+        <div class="overlay data-overlay subcity-val">{{ card.data.zone_en }}</div>
+        <div class="overlay data-overlay nat-val">{{ card.data.nat_am }} | {{ card.data.nat_en }}</div>
+        <div class="overlay data-overlay woreda-val">{{ card.data.woreda_en }}</div>
+        <div class="overlay data-overlay phone-val">{{ card.data.phone }}</div>
+
+        <!-- Main QR -->
+        <div class="overlay qr-main-overlay">
+            <img src="{{ card.qr }}" alt="Main QR">
+        </div>
+
+        <!-- Right Side Cards -->
+        <div class="overlay card-preview-overlay front-card-pos"
+            style="background-image: url('{{ card.front_orig }}'); background-size: cover; background-position: center; background-repeat: no-repeat;">
+        </div>
+        <div class="overlay card-preview-overlay back-card-pos"
+            style="background-image: url('{{ card.back_orig }}'); background-size: cover; background-position: center; background-repeat: no-repeat;">
+        </div>
+    </div>
+    {% endfor %}
+
+    <button class="download-btn" id="downloadPdf">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Download PDF
+    </button>
+
+    <script>
+        document.getElementById('downloadPdf').addEventListener('click', function () {
+            const element = document.querySelector('.document-container');
+            if (!element) return;
+
+            // Scroll to top to ensure no offset gap is captured
+            window.scrollTo(0, 0);
+
+            const opt = {
+                margin: 0,
+                filename: 'Ethiopian_Digital_ID_Official.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    letterRendering: true,
+                    logging: false,
+                    scrollY: 0,
+                    scrollX: 0
+                },
+                jsPDF: {
+                    unit: 'px',
+                    format: [1100, 1555],
+                    orientation: 'portrait'
+                }
+            };
+
+            // Toggle button visibility carefully
+            this.style.opacity = '0';
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                this.style.opacity = '1';
+            }).catch(err => {
+                console.error("PDF generation error:", err);
+                this.style.opacity = '1';
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -39,7 +39,38 @@ def normalize(image):
 
     return resized
 
+from datetime import datetime
 
+def calculate_issue_from_expiry(date_str, minus_years=5):
+    """
+    Takes a date string (YYYY-MM-DD or DD/MM/YYYY), 
+    subtracts years, and returns the new string.
+    """
+    # Try common formats used in your OCR output
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            # Subtract years by replacing the year attribute
+            issue_dt = dt.replace(year=dt.year - minus_years)
+            return issue_dt.strftime(fmt)
+        except (ValueError, TypeError):
+            continue
+    return "—"
+
+def transliterate_to_amharic(en_name):
+    """Basic fallback transliteration for names if Amharic crop fails."""
+    if not en_name or en_name == "—": return "—"
+    # Mapping for common sounds/names (very simplified)
+    mapping = {
+        'a': 'አ', 'b': 'በ', 'c': 'ከ', 'd': 'ደ', 'e': 'ኤ', 'f': 'ፈ', 'g': 'ገ', 'h': 'ሀ',
+        'i': 'ኢ', 'j': 'ጀ', 'k': 'ከ', 'l': 'ለ', 'm': 'መ', 'n': 'ነ', 'o': 'ኦ', 'p': 'ፐ',
+        'q': 'ቀ', 'r': 'ረ', 's': 'ሰ', 't': 'ተ', 'u': 'ኡ', 'v': 'ቨ', 'w': 'ወ', 'x': 'ክስ',
+        'y': 'የ', 'z': 'ዘ', 'sh': 'ሸ', 'ch': 'ቸ', 'gn': 'ኝ', 'nh': 'ኝ'
+    }
+    am = en_name.lower()
+    for en, amh in sorted(mapping.items(), key=lambda x: len(x[0]), reverse=True):
+        am = am.replace(en, amh)
+    return am
 # -----------------------------
 # 3. PREPROCESS FOR OCR
 # -----------------------------
@@ -56,7 +87,7 @@ def preprocess(region):
     # Resize to improve OCR on small text
     resized = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
     
-    # Adaptive thresholding or OTSU
+    # Use OTSU thresholding (generally more robust for white-background IDs)
     thresh = cv2.threshold(resized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
     
     return thresh
@@ -88,8 +119,132 @@ def read_text(region, psm=6, lang="eng+amh"):
     for label in labels_to_remove:
         # Case insensitive removal
         clean_text = re.sub(re.escape(label), "", clean_text, flags=re.IGNORECASE)
+    
+    return clean_text
 
-    return clean_text.strip()
+def looks_like_name(text):
+    """
+    Validates if a string looks like a full name with high precision.
+    Rejects noise, labels, and poorly formatted OCR artifacts.
+    """
+    if not text or len(text) > 70 or len(text) < 5:
+        return False
+    
+    # Remove obvious noise and check digits
+    clean = re.sub(r'[:|/\\_\[\]\(\)\-\.]', ' ', text).strip()
+    
+    # Rejection list for common OCR noise/labels (EXACT WORD or MAJOR PART)
+    blockwords = {"fullname", "full name", "date", "birth", "sex", "expiry", "issue", "male", "female", "card", "id", "national", "fayda", "digital", "copy", "registration", "federal", "republic", "pan", "pfo", "pfa", "aps", "apo", "pda", "od", "at", "da", "ap", "official", "nationality", "selte", "declared", "birthdate"}
+    low_clean = clean.lower()
+    words = low_clean.split()
+    
+    # If any word in the candidate is a known label, reject it
+    if any(w.strip(".:") in blockwords for w in words):
+        return False
+
+    # Block patterns like "Feb", "Jan", "OCR", "Nationality"
+    noise_patterns = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "ocr"]
+    if any(p in words for p in noise_patterns):
+        return False
+
+    # Strict digit rejection: no digits allowed in a clean name
+    if any(c.isdigit() for c in clean):
+        return False
+    
+    # Check word count - must be at least 2 substantiated words
+    words_orig = clean.split()
+    long_words = [w for w in words_orig if len(w) > 2]
+    if len(long_words) < 2:
+        return False
+    
+    # Reject if too many single letters (OCR spam)
+    single_letters = [w for w in words_orig if len(w) == 1]
+    if len(single_letters) > 1:
+        return False
+        
+    return True
+
+def looks_like_amharic_name(text):
+    """
+    Validates if a string looks like an Amharic full name.
+    """
+    if not text or len(text) < 3:
+        return False
+    
+    # Keep only Amharic characters for validation
+    am_chars = re.sub(r'[^\u1200-\u137F\s]', ' ', text).strip()
+    words = am_chars.split()
+    
+    # Reject card labels and common noise
+    # Ethiopic punctuation to strip: ፡(1361), ።(1362), ፣(1363), ፤(1364), ፥(1365), ፦(1366), ፧(1367), ፨(1368)
+    blockwords = {
+        "ሙሉ", "ስም", "ፆታ", "ባታ", "ቀን", "ትውልድ", "የውልድ", "ካርድ", 
+        "ቁጥር", "ዜግነት", "ኢትዮጵያዊ", "መታወቂያ", "ዲጂታል", "ኢትዮጵያ", "ሰቅ", "ኢቶዮጵያ", "ብሔራዊ"
+    }
+    
+    for w in words:
+        # Clean word of Amharic punctuation for matching
+        w_clean = re.sub(r'[\u1361-\u1368]', '', w)
+        if w_clean in blockwords:
+            return False
+        
+    # Standard Amharic names have 2-4 words
+    if not (2 <= len(words) <= 4):
+        return False
+        
+    # Substantiated words (at least 2 chars long)
+    long_words = [w for w in words if len(w) >= 2]
+    if len(long_words) < 2:
+        return False
+        
+    return True
+
+def score_amharic_name(text):
+    """
+    Scores Amharic name candidates.
+    """
+    score = 0
+    words = text.strip().split()
+    
+    # Prefer 3 words
+    if len(words) == 3:
+        score += 10
+    elif len(words) == 2:
+        score += 5
+        
+    # Prefer length of characters (substantially long names)
+    score += min(len(text), 20)
+    
+    return score
+
+def score_name_candidate(text):
+    """
+    Scoring system that strongly prefers Title Case and 3-word names.
+    """
+    score = 0
+    words = text.strip().split()
+    
+    # Length bonus: preferred 2-4 words
+    if 2 <= len(words) <= 4:
+        score += 5
+    elif 5 <= len(words) <= 6:
+        score += 2
+        
+    # Title Case bonus (crucial for English names)
+    if all(w[0].isupper() for w in words if len(w) > 2):
+        score += 10
+    elif text.istitle():
+        score += 8
+        
+    # Penalty for very short words
+    shorts = [w for w in words if len(w) <= 2]
+    score -= len(shorts) * 2
+        
+    # Bonus for common name-like word counts
+    if len(words) == 3:
+        score += 3
+        
+    return score
 
 
 # -----------------------------
@@ -477,6 +632,9 @@ def extract_front(image, qr_data=None):
         "barcode_data": "—"
     }
 
+    # header keywords (EXACT WORD MATCHING)
+    header_keywords = {"ethiopian", "digital", "id", "card", "national", "federal", "fayda", "republic", "fcn", "fin", "copy", "official", "nationalid", "registration", "name", "full", "fullname", "ሙሉ", "ስም", "ap", "da", "apo", "apf", "aps", "pan", "pfa", "pto", "pfo", "pda", "od", "at"}
+
     # 1. PREPARE FULL IMAGE
     # -----------------------------
     # Use the full preprocessed image for initial layout analysis
@@ -503,14 +661,16 @@ def extract_front(image, qr_data=None):
     
     for i in range(len(ocr_data['text'])):
         txt = ocr_data['text'][i].strip().lower()
-        if any(h in txt for h in ["ethiopian", "digital", "id", "national", "federal"]):
-            id_top_y = max(id_top_y, ocr_data['top'][i])
+        if any(h in txt for h in ["ethiopian", "digital", "id", "national", "federal", "fayda", "republic", "federal"]):
+            # More aggressive header skip for screenshots
+            id_top_y = max(id_top_y, ocr_data['top'][i] + ocr_data['height'][i] + 5)
             header_found = True
     
     if not header_found:
-        id_top_y = 50 # Lower threshold since image is scaled 2x
+        id_top_y = 10 
     else:
-        id_top_y += 50 # Buffer
+        # Don't skip more than 12% of the height initially to avoid hitting labels
+        id_top_y = min(id_top_y, max(100, int(h_proc * 0.12)))
 
     # 3. GROUP WORDS INTO LINES (Below Header)
     # -----------------------------
@@ -518,11 +678,18 @@ def extract_front(image, qr_data=None):
     for i in range(len(ocr_data['text'])):
         t = ocr_data['text'][i].strip()
         y = ocr_data['top'][i]
+        x = ocr_data['left'][i]
+        
+        # 75% Width Filter: Ignore right-side "sideways" labels (like Date of Issue) 
+        # that interfere with the primary field sequence.
+        if x > w_proc * 0.75:
+            continue
+
         if t and y > id_top_y:
             raw_elements.append({
                 'text': t, 
                 'top': y, 
-                'left': ocr_data['left'][i], 
+                'left': x, 
                 'w': ocr_data['width'][i], 
                 'h': ocr_data['height'][i]
             })
@@ -545,36 +712,40 @@ def extract_front(image, qr_data=None):
     # 4. SEQUENCE-AWARE BUCKETING
     # -----------------------------
     label_map = {
-        "name": ["name", "full", "ስም", "ሙሉ", "ሙለ", "ሙታ", "ሰም", "ጳም"],
-        "dob": ["birth", "date", "የውልድ", "ትውልድ", "ቀን", "የልደት", "birt", "dob"],
-        "sex": ["sex", "ፆታ", "ባታ", "ፃታ"],
-        "expiry": ["expiry", "ያሚያበቃበት", "የሚቆይበት", "የሚያበቃበት", "expir", "expire", "doe"],
-        "issue": ["issue", "የተሰጠበት"],
+        "name": ["fullname", "full name", "ስም", "ሙሉ", "ሙለ", "ሙታ", "ሰም", "ጳም", "ስም:", "ስም፡", "ሙሉስም", "name", "Name", "fullname:", "APF", "AFF", "A-P-F", "Mu"],
+        "dob": ["date of birth", "birth", "የውልድ", "ትውልድ", "ቀን", "የልደት", "dob", "ትውልደ", "የልደትቀን"],
+        "sex": ["sex", "ፆታ", "ባታ", "ፃታ", "ፆባ", "ባታ", "ፆ", "ታ"],
+        "expiry": ["date of expiry", "expiry", "ያሚያበቃበት", "የሚቆይበት", "የሚያበቃበት", "expir", "expire", "expirey"],
+        "issue": ["issue date", "issue", "የተሰጠበት"],
         "fcn": ["fan", "ካርድ", "ቁጥር", "fcn", "fina", "fin"]
     }
     
-    buckets = {"name": [], "dob": [], "sex": [], "expiry": [], "issue": [], "fcn": []}
-    active_key = "name"
+    buckets = {"header": [], "name": [], "dob": [], "sex": [], "expiry": [], "issue": [], "fcn": []}
+    active_key = "header"
     
     for line in lines:
-        line_txt_low = " ".join([e['text'].lower() for e in line])
-        found_new_field = False
-        label_end_x = 0
+        line.sort(key=lambda x: x['left'])
+        current_label = active_key
         
-        for key, tokens in label_map.items():
-            if any(t in line_txt_low for t in tokens):
-                # Find the rightmost edge of the label part
-                for e in line:
-                    if any(t in e['text'].lower() for t in tokens):
-                        label_end_x = max(label_end_x, e['left'] + e['w'])
-                active_key = key
-                found_new_field = True
-                break
-        
-        # Words to the right of label (or all words if no label) belong to active_key
         for e in line:
-            if e['left'] > label_end_x:
-                buckets[active_key].append(e)
+            # Check if this word itself is a label token
+            is_label = False
+            t_low = e['text'].lower().strip(":| ")
+            if len(t_low) < 2: continue # skip noise tokens like | or :
+
+            for key, tokens in label_map.items():
+                # Use stricter matching for English labels to avoid name collision
+                if any((t == t_low or (len(t) > 3 and t in t_low)) for t in tokens):
+                    current_label = key
+                    active_key = key 
+                    is_label = True
+                    break
+            
+            if not is_label:
+                # Extra safety: If we are still in "header" but see something that looks like a name
+                # and are below the presumed header Y, we might want to switch to name.
+                # But it's safer to wait for the label "Full Name".
+                buckets[current_label].append(e)
 
     # 5. PROCESS BUCKETS (Dual-Pass for Name)
     # -----------------------------
@@ -585,138 +756,243 @@ def extract_front(image, qr_data=None):
     
 
 
-    # --- Name Processing ---
-    name_words = buckets["name"]
-    if name_words:
-        name_words.sort(key=lambda x: x['top'])
-        
-        # --- NEW LOGIC: Explicit Amharic Bounding Box Crop ---
-        # 1. Find the bottom of the "Full Name" label logic (or start of bucket)
-        label_bottom_y = name_words[0]['top'] - 10 
-        
-        # 2. Find the top of the English name (first line that is purely English)
-        eng_top_y = h_proc # Default to bottom of image
-        for w in name_words:
-            # If word is mostly English letters and has decent length
-            if len(re.sub(r'[^a-zA-Z]', '', w['text'])) > 3:
-                eng_top_y = w['top']
+    # --- Name Processing (Robust Anchor-Based Logic) ---
+    name_candidates = []
+    
+    # Identify DOB anchor
+    dob_anchor_y = None
+    if buckets.get("dob"):
+        dob_anchor_y = min(w['top'] for w in buckets["dob"])
+    else:
+        # Search globally for "Date of Birth" label if bucket is empty
+        for i in range(len(ocr_data['text'])):
+            if any(l in ocr_data['text'][i].lower() for l in ["birth", "የውልድ", "ትውልድ"]):
+                dob_anchor_y = ocr_data['top'][i]
                 break
-                
-        # 3. Define the bounding box for Amharic (between label and English)
-        am_box_top = max(0, label_bottom_y)
-        am_box_bottom = eng_top_y
-        
-        # Only proceed with this targeted crop if we have a reasonable vertical gap
-        if am_box_bottom - am_box_top > 15:
-            # Find horizontal bounds from all words in this vertical gap
-            am_cand_words = [w for w in name_words if am_box_top <= w['top'] <= am_box_bottom]
-            if am_cand_words:
-                min_x = max(0, min(w['left'] for w in am_cand_words) - 15)
-                max_x = min(w_proc, max(w['left'] + w['w'] for w in am_cand_words) + 15)
-                
-                if max_x - min_x > 50:
-                    am_roi = proc_full[am_box_top:am_box_bottom, min_x:max_x]
-                    
-                    # Optional: Save crop for debugging
-                    # cv2.imwrite("debug_amh_crop.png", am_roi)
-                    
-                    # Clean and OCR the specific crop
-                    roi_z = cv2.resize(am_roi, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-                    th1 = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
-                    raw_am_crop = pytesseract.image_to_string(th1, lang="amh", config='--psm 6').strip()
-                    
-                    # Clean the result
-                    clean_crop = re.sub(r'[a-zA-Z0-9\(\)\{\}\[\]\.\,\|\!\?\-\_\/\\\»]', ' ', raw_am_crop)
-                    clean_crop = re.sub(r'[\u1369-\u1371]', ' ', clean_crop) 
-                    am_words = [w for w in clean_crop.replace("፣", " ").replace("።", " ").split() if sum(1 for c in w if 0x1200 <= ord(c) <= 0x137F) / max(1, len(w)) > 0.6]
-                    
-                    if am_words and len(" ".join(am_words)) > 3:
-                        data["name_am"] = " ".join(am_words[:4])
-                        # Filter out garbage
-                        garbage_tokens = ["ርዐ", "ከህከ", "ፚ", "ቺጅ", "ጩወ", "ፍነ", "ርን", "ቺ", "ጩ", "ኚ", "ጯ"] 
-                        if any(g in data["name_am"] for g in garbage_tokens):
-                            data["name_am"] = "—"
 
-        # --- Standard Line-by-Line Processing (Fallback for English and missing Amharic) ---
-        n_lines = []
-        cl = [name_words[0]]
-        for w in name_words[1:]:
-            if w['top'] - cl[-1]['top'] < 25: cl.append(w)
+    # Region of Interest (ROI) for Name
+    name_roi_top = 0
+    name_roi_bottom = h_proc
+    
+    if dob_anchor_y:
+        # PRIMARY: Catch both Amharic and English above DOB
+        name_roi_top = max(id_top_y, dob_anchor_y - 425) 
+        name_roi_bottom = dob_anchor_y - 20
+    else:
+        # FALLBACK: Region between header and first structural field (Sex/Expiry)
+        first_field_y = h_proc
+        for key in ["sex", "expiry", "fcn"]:
+            if buckets.get(key):
+                first_field_y = min(first_field_y, min(w['top'] for w in buckets[key]))
+        
+        name_roi_top = id_top_y
+        name_roi_bottom = min(first_field_y - 10, int(h_proc * 0.48))
+
+    # Collect candidates from the spatial region
+    spatial_candidates = []
+    for i in range(len(ocr_data['text'])):
+        txt = ocr_data['text'][i].strip()
+        ty = ocr_data['top'][i]
+        tx = ocr_data['left'][i]
+        
+        if name_roi_top <= ty <= name_roi_bottom:
+            if tx > w_proc * 0.75:
+                continue
+            
+            if len(txt) <= 1: continue
+            
+            txt_words = txt.lower().split()
+            if not any(w.strip(".:") in header_keywords for w in txt_words):
+                spatial_candidates.append({
+                    'text': txt, 'top': ty, 'left': tx, 
+                    'w': ocr_data['width'][i], 'h': ocr_data['height'][i]
+                })
+
+    # Group spatial candidates into lines
+    s_lines = []
+    if spatial_candidates:
+        spatial_candidates.sort(key=lambda x: x['top'])
+        cl = [spatial_candidates[0]]
+        for w in spatial_candidates[1:]:
+            if w['top'] - cl[-1]['top'] < 45: cl.append(w)
             else:
-                n_lines.append(sorted(cl, key=lambda x: x['left']))
+                s_lines.append(sorted(cl, key=lambda x: x['left']))
                 cl = [w]
-        n_lines.append(sorted(cl, key=lambda x: x['left']))
-        
-        am_parts, en_parts = [], []
-        for nl in n_lines:
-            l_top = min(w['top'] for w in nl)
-            l_bot = max(w['top'] for w in nl) + 50
-            l_left = min(w['left'] for w in nl) - 15
-            l_right = max(w['left'] for w in nl) + 400
-            
-            y1, y2 = max(0, l_top - 60), min(h_proc, l_bot + 20)
-            x1, x2 = max(0, l_left), min(w_proc, l_right)
-            if (y2-y1) < 20 or (x2-x1) < 40: continue
-            
-            roi_g = proc_full[y1:y2, x1:x2]
-            roi_z = cv2.resize(roi_g, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            
-            # Extract English
-            en_n = pytesseract.image_to_string(roi_z, lang="eng", config='--psm 7').strip()
-            en_words = [w for w in en_n.split() if int(len(re.findall(r'[a-z]', w.lower()))) > 1]
-            en_words = [w for w in en_words if w.lower() not in ["name", "full", "id", "card", "national"]]
-            if en_words: en_parts.append(" ".join(en_words))
-            
-            # Fallback Amharic extraction if our precise crop failed
-            if data["name_am"] == "—":
-                th1 = cv2.adaptiveThreshold(roi_z, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15)
-                _, th2 = cv2.threshold(roi_z, 140, 255, cv2.THRESH_BINARY)
-                pass1 = pytesseract.image_to_string(th1, lang="amh", config='--psm 6').strip()
-                pass2 = pytesseract.image_to_string(th2, lang="amh", config='--psm 6').strip()
-                am_n = pass1 + " " + pass2
-                am_c = re.sub(r'[a-zA-Z0-9\(\)\{\}\[\]\.\,\|\!\?\-\_\/\\\»]', ' ', am_n)
-                am_words = [w for w in am_c.replace("፣", " ").replace("።", " ").split() if len(w) > 1 and sum(1 for c in w if 0x1200 <= ord(c) <= 0x137F) / len(w) > 0.6]
-                if am_words: am_parts.append(" ".join(am_words))
+        s_lines.append(sorted(cl, key=lambda x: x['left']))
 
-        # Compile Amharic fallback if needed
-        if data["name_am"] == "—" and am_parts:
-            seen = set()
-            u_am = []
-            for p in am_parts:
-                for w in p.split():
-                    if w not in seen and not any(noise in w for noise in ["ርዐ", "ቦዩህ", "ነሃ", "ልከ", "ከህ", "ከህከ"]):
-                        u_am.append(w); seen.add(w)
-            data["name_am"] = " ".join(u_am[:4])
+    # --- Name Processing (Robust Line Association Logic) ---
+    extracted_lines = []
+    am_anchor_top = None
+    am_anchor_text = None
+    
+    if s_lines:
+        for line in s_lines:
+            l_top = min(w['top'] for w in line)
+            l_text = " ".join([w['text'] for w in line])
             
-            garbage_tokens = ["ርዐ", "ከህከ", "ፚ", "ቺጅ", "ጩወ", "ፍነ", "ርን", "ቺ", "ጩ", "ኚ", "ጯ"] 
-            if any(g in data["name_am"] for g in garbage_tokens) or re.search(r'[፠-⠿]', data["name_am"]) or len(data["name_am"]) < 3:
-                data["name_am"] = "—"
+            # Optimized OCR for each line to catch noisy English names
+            try:
+                l_bot = max(w['top'] + w['h'] for w in line)
+                l_left = min(w['left'] for w in line)
+                l_right = max(w['left'] + w['w'] for w in line)
+                pad = 12
+                line_crop = crop(proc_full, l_top-pad, l_bot+pad, l_left-pad, l_right+pad)
+                if line_crop.size > 0:
+                    opt_text = pytesseract.image_to_string(line_crop, lang="eng", config="--psm 7").strip()
+                    # Apply noise filter to optimized text too (WORD BASED)
+                    opt_words = opt_text.lower().split()
+                    if not any(w.strip(".:") in header_keywords for w in opt_words):
+                        # Only replace if optimized result is 'richer' in letters and looks like a name part
+                        if sum(c.isalpha() for c in opt_text) > sum(c.isalpha() for c in l_text) * 0.8:
+                            # Clean up common PSM 7 artifacts (trailing dots/marks)
+                            opt_text = re.sub(r'[^a-zA-Z\s]', '', opt_text).strip()
+                            if len(opt_text.split()) >= len(l_text.split()):
+                                l_text = opt_text
+            except: pass
+            
+            extracted_lines.append({'text': l_text, 'top': l_top})
+            
+    # --- New Robust Amharic Selection ---
+    am_cands = []
+    for el in extracted_lines:
+        if looks_like_amharic_name(el['text']):
+            am_cands.append(el)
+            
+    if am_cands:
+        # Pick best Amharic candidate based on score
+        best_am_obj = max(am_cands, key=lambda x: score_amharic_name(x['text']))
+        am_anchor_top = best_am_obj['top']
+        am_anchor_text = best_am_obj['text']
+    elif extracted_lines:
+        # Fallback to first line with ANY Amharic if no perfect candidate
+        for el in extracted_lines:
+            am_chars = re.sub(r'[^\u1200-\u137F]', '', el['text'])
+            if len(am_chars) >= 5:
+                am_anchor_top = el['top']
+                am_anchor_text = el['text']
+                break
+
+    # 1. Assign Amharic Name
+    if am_anchor_text:
+        # Keep only Ethiopic script characters (U+1200 to U+137F) and spaces
+        am_filtered = re.sub(r'[^\u1200-\u137F\s]', ' ', am_anchor_text)
+        data["name_am"] = ' '.join(am_filtered.split()).strip()
+    
+    # 2. Assign English Name via Association
+    best_en = "—"
+    if am_anchor_top is not None:
+        # Search BELOW (+10 to +120)
+        below_cands = []
+        for el in extracted_lines:
+            diff = el['top'] - am_anchor_top
+            if 10 <= diff <= 120:
+                # Clean punctuations but keep spaces
+                en_clean = re.sub(r'[^a-zA-Z\s]', ' ', el['text']).strip()
+                en_clean = ' '.join(en_clean.split())
+                if looks_like_name(en_clean): below_cands.append(en_clean)
         
-        # Compile English
-        if en_parts:
-            seen = set()
-            u_en = []
-            for p in en_parts:
-                for w in p.split():
-                    if w.lower() not in seen:
-                        u_en.append(w); seen.add(w.lower())
-            data["name_en"] = " ".join(u_en[:4])
+        if below_cands:
+            best_en = max(below_cands, key=score_name_candidate)
+        else:
+            # Search ABOVE (-120 to -10)
+            above_cands = []
+            for el in extracted_lines:
+                diff = am_anchor_top - el['top']
+                if 10 <= diff <= 120:
+                    en_clean = re.sub(r'[^a-zA-Z\s]', '', el['text']).strip()
+                    if looks_like_name(en_clean): above_cands.append(en_clean)
+            if above_cands:
+                best_en = max(above_cands, key=score_name_candidate)
+
+    # 3. Global Fallback
+    if best_en == "—":
+        global_cands = []
+        for el in extracted_lines:
+            en_clean = re.sub(r'[^a-zA-Z\s]', '', el['text']).strip()
+            if looks_like_name(en_clean): global_cands.append(en_clean)
+        if global_cands:
+            best_en = max(global_cands, key=score_name_candidate)
+            
+    data["name_en"] = best_en
+
+    if data["name_am"] == "—" and data["name_en"] != "—":
+        data["name_am"] = transliterate_to_amharic(data["name_en"])
+
+    # --- Image Crop enhancement (Integrated with Spatial Candidates) ---
+    if spatial_candidates:
+        try:
+            # ROI for visual confirmation - using the full anchor-based region to ensure both lines (AM/EN) are captured
+            am_top = name_roi_top
+            am_bot = name_roi_bottom
+            
+            # ROI for visual confirmation - using nearly full-width to ensure nothing is cut off
+            x0 = max(0, int(w_proc * 0.08)) 
+            x1 = min(w_proc, int(w_proc * 0.92))
+            
+            img_s = cv2.resize(image, (w_proc, h_proc))
+            crop_roi = img_s[max(0, am_top):min(h_proc, am_bot), x0:x1]
+            if crop_roi.size > 0:
+                # 1. High-quality upscale
+                roi_z = cv2.resize(crop_roi, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_LANCZOS4)
+                
+                # 2. Advanced Denoise (Mild to preserve text edges)
+                roi_z = cv2.fastNlMeansDenoisingColored(roi_z, None, 10, 10, 7, 21)
+                
+                # 3. Visual Polish via PIL (Increased for BOLDNESS)
+                pil_roi = Image.fromarray(cv2.cvtColor(roi_z, cv2.COLOR_BGR2RGB))
+                pil_roi = ImageEnhance.Contrast(pil_roi).enhance(1.8)
+                pil_roi = ImageEnhance.Sharpness(pil_roi).enhance(4.0)
+                roi_z = cv2.cvtColor(np.array(pil_roi), cv2.COLOR_RGB2BGR)
+
+                # 4. Refined Background removal
+                gray = cv2.cvtColor(roi_z, cv2.COLOR_BGR2GRAY)
+                mask = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 25, 10)
+                
+                # --- BOLDNESS ---
+                # Erode background (255) to expand foreground text (0)
+                kernel_bold = np.ones((2,2), np.uint8)
+                mask = cv2.erode(mask, kernel_bold, iterations=1)
+                
+                # Close/Open mask to remove noise artifacts
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_bold)
+                
+                bgra = cv2.cvtColor(roi_z, cv2.COLOR_BGR2BGRA)
+                bgra[mask == 255] = (0,0,0,0) # Mask matches ID light background
+                
+                _, buf = cv2.imencode('.png', bgra)
+                data["name_am_encoded"] = buf
+        except: pass
 
     # --- Other Fields ---
+    eth_exp, greg_exp = "—", "—"  # default values
+
     for key in ["dob", "sex", "expiry", "issue", "fcn"]:
-        if buckets[key] or key in ["dob", "expiry", "issue"]: # Always attempt dates if key exists
-            val_str = " ".join([e['text'] for e in sorted(buckets[key], key=lambda x: x['left'])])
+        if buckets[key] or key in ["dob", "expiry", "issue"]:
+          val_str = " ".join([e['text'] for e in sorted(buckets[key], key=lambda x: x['left'])])
+        
+        if key == "dob":
+            data["dob_eth"], data["dob_greg"] = extract_dates_smart(val_str, is_dob=True)
+        elif key == "sex":
+            low_val = val_str.lower()
+            if "female" in low_val or "ሴት" in low_val or "f" == low_val:
+                data["sex_en"], data["sex_am"] = "Female", "ሴት"
+            elif "male" in low_val or "ወንድ" in low_val or "m" == low_val:
+                data["sex_en"], data["sex_am"] = "Male", "ወንድ"
+        elif key == "expiry":
+            eth_exp, greg_exp = extract_dates_smart(val_str, is_dob=False)
+        
+        data["expiry_eth"] = eth_exp
+        data["expiry_greg"] = greg_exp
             
-            if key == "dob":
-                data["dob_eth"], data["dob_greg"] = extract_dates_smart(val_str, is_dob=True)
-            elif key == "sex":
-                s_low = val_str.lower()
-                if any(m in s_low for m in ["ወንድ", "male", "m"]): data["sex_am"], data["sex_en"] = "ወንድ", "Male"
-                elif any(f in s_low for f in ["ሴት", "female", "f"]): data["sex_am"], data["sex_en"] = "ሴት", "Female"
-            elif key == "expiry":
-                data["expiry_eth"], data["expiry_greg"] = extract_dates_smart(val_str, is_dob=False)
-            elif key == "issue":
-                # We extract it to avoid it polluting other fields
+            # 3. CALCULATION (Now 'eth_exp' and 'greg_exp' are safe to use)
+        if greg_exp != "—":
+                data["issue_greg"] = calculate_issue_from_expiry(greg_exp, 5)
+        if eth_exp != "—":
+                data["issue_eth"] = calculate_issue_from_expiry(eth_exp, 5)
+
+        elif key == "issue":
+            # Only extract if we haven't already calculated it from Expiry
+            if data.get("issue_greg") == "—":
                 data["issue_eth"], data["issue_greg"] = extract_dates_smart(val_str, is_dob=False)
             elif key == "fcn":
                 fcn_c = re.sub(r'[^0-9]', '', val_str)
@@ -825,10 +1101,11 @@ def extract_front(image, qr_data=None):
             if len(parts) > 1 and parts[0] == parts[-1] and len(parts[0]) == 4:
                 data[k] = " ".join(parts[:-1])
 
-    # 6. QR OVERRIDES
+    # 6. QR OVERRIDES (Prioritize OCR, Skip Names per user request)
     if qr_data:
-        if qr_data.get("name"): data["name_en"] = qr_data["name"]
-        if qr_data.get("name_am"): data["name_am"] = qr_data["name_am"]
+        # data["name_en"] = qr_data.get("name", data["name_en"])
+        # data["name_am"] = qr_data.get("name_am", data["name_am"])
+            
         if qr_data.get("dob"): data["dob_greg"] = qr_data["dob"]
         if qr_data.get("sex"):
             data["sex_en"] = qr_data["sex"]
@@ -837,26 +1114,15 @@ def extract_front(image, qr_data=None):
 
     # 7. FINAL NAME TRANSLITERATION (Smart Fallback)
     if data["name_en"] != "—":
-        trans_am = transliterate_to_amharic(data["name_en"])
-        
-        # If Amharic is missing, use transliteration
-        if data["name_am"] == "—" or len(data["name_am"]) < 3:
-            data["name_am"] = trans_am
+        if not any(0x1200 <= ord(c) <= 0x137F for c in data["name_am"]) or len(data["name_am"]) < 2:
+            data["name_am"] = transliterate_to_amharic(data["name_en"])
         else:
-            # If we have both, verify the OCR is likely a real name
-            en_word_count = len(data["name_en"].split())
-            am_word_count = len(data["name_am"].split())
-            
-            # If word counts differ, or OCR has suspicious repeat chars, use transliteration
-            if en_word_count != am_word_count:
-                data["name_am"] = trans_am
-            # Double check for very common OCR failures again
-            elif any(x in data["name_am"] for x in ["ክ", "ች", "ሽ", "ዝ", "ጅ"]):
-                 # If Amharic OCR contains too many Sadis (6th) markers it might be noise
-                 # but this is risky, so we just stick to word count mostly.
-                 pass
-            # Otherwise, we keep the OCR as requested ("exact as image")
-            # unless the OCR has suspicious characters
+            # If we have both, verify word counts
+            en_words = data["name_en"].split()
+            am_words = data["name_am"].split()
+            if len(en_words) != len(am_words) and len(en_words) > 1:
+                # Transliteration is often safer than broken OCR
+                data["name_am"] = transliterate_to_amharic(data["name_en"])
     
     # ── 8. VERTICAL ISSUE DATE EXTRACTION (Unified Dynamic Layout) ──
     h_img, w_img = image.shape[:2]
@@ -1054,7 +1320,7 @@ def extract_back(image):
     en_parts_map = {"reg": None, "zone": None, "woreda": None}
     
     am_list, en_list = [], []
-    skip_labels = {"Region", "Zone", "Woreda", "Address", "ክልል", "ዞን", "ወረዳ", "ቁጥር", "አድራሻ"}
+    skip_labels = {"Region", "Zone", "Woreda", "Address", "ክልል", "ዞን", "ወረዳ", "ቁጥር", "አድራሻ", "APD SAL", "አፕድ ሳል"}
 
     for l in lines:
         l_low = l.lower()
@@ -1279,7 +1545,27 @@ def export_html(data):
     print("Exported to final_id_result.html")
 
 # -----------------------------
-# 12. MAIN PROCESS FUNCTION
+# 12. MAIN ENTRY POINTS
+# -----------------------------
+def process_image_front(image_path):
+    """
+    Stand-alone function for processing only the front image.
+    """
+    img = load_image(image_path)
+    if img is None: return {}
+    return extract_front(img)
+
+def process_image(paths):
+    """
+    General entry point for processing images.
+    """
+    if not paths: return {}
+    img = load_image(paths[0])
+    if img is None: return {}
+    return extract_front(img)
+
+# -----------------------------
+# 13. SCREENSHOTS PROCESSOR
 # -----------------------------
 def process_screenshots(front_img, back_img, qr_img):
     """
@@ -1307,6 +1593,7 @@ def process_screenshots(front_img, back_img, qr_img):
     final_data["qr_raw"] = qr_raw
     final_data["portrait_encoded"] = portrait_encoded
     final_data["qr_code_encoded"] = qr_code_encoded
+    final_data["name_am_encoded"] = front_data.get("name_am_encoded") # Added
     
     return final_data
 

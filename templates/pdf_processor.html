@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Processor - ID Cards</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════ POPUP STYLES ═══════════════════════ */
+        .popup-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+        .popup-backdrop.active { display: flex; }
+        .popup-card {
+            background: white; border-radius: 16px; width: 90%; max-width: 480px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
+            animation: popIn 0.3s ease;
+        }
+        @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .popup-header {
+            background: linear-gradient(135deg, #1a6b3e, #2ecc71);
+            color: white; padding: 20px; text-align: center; position: relative;
+        }
+        .popup-rings {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80px; height: 80px;
+        }
+        .r {
+            position: absolute; border: 3px solid rgba(255,255,255,0.4);
+            border-radius: 50%; animation: spin 2s linear infinite;
+        }
+        .pr1 { width: 100%; height: 100%; border-top-color: white; animation-duration: 1.5s; }
+        .pr2 { width: 70%; height: 70%; top: 15%; left: 15%; border-right-color: white; animation-duration: 2s; animation-direction: reverse; }
+        .pr3 { width: 40%; height: 40%; top: 30%; left: 30%; border-bottom-color: white; animation-duration: 1s; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pr-center {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 36px; height: 36px; background: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; color: #1a6b3e; font-weight: bold;
+        }
+        .popup-header-title { font-size: 18px; font-weight: 700; margin-top: 50px; }
+        .popup-header-sub { font-size: 13px; opacity: 0.9; margin-top: 4px; }
+        
+        .popup-body { padding: 20px; }
+        .popup-count-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #f1f5f9; padding: 6px 14px; border-radius: 20px;
+            font-size: 13px; font-weight: 600; color: #334155;
+        }
+        .count-dot { width: 8px; height: 8px; background: #2ecc71; border-radius: 50%; }
+        
+        .popup-bar-label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin: 16px 0 8px; color: #475569; }
+        .popup-bar-wrap {
+            height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;
+        }
+        .popup-bar-fill {
+            height: 100%; width: 0%; background: linear-gradient(90deg, #1a6b3e, #2ecc71);
+            border-radius: 4px; animation: fillBar 3s ease-in-out forwards;
+        }
+        @keyframes fillBar { to { width: 100%; } }
+        
+        .popup-steps { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .popup-step {
+            display: flex; align-items: center; gap: 12px; padding: 12px;
+            border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;
+            opacity: 0.5; transition: all 0.3s ease;
+        }
+        .popup-step.active { opacity: 1; background: #ecfdf5; border-color: #2ecc71; }
+        .popup-step.done { opacity: 1; background: #f0fdf4; border-color: #22c55e; }
+        .ps-icon { font-size: 20px; }
+        .ps-info { flex: 1; }
+        .ps-title { font-weight: 600; font-size: 14px; color: #1e293b; }
+        .ps-sub { font-size: 12px; color: #64748b; }
+        .ps-spinner {
+            width: 16px; height: 16px; border: 2px solid #cbd5e1;
+            border-top-color: #1a6b3e; border-radius: 50%;
+            animation: spin 1s linear infinite; display: none;
+        }
+        .popup-step.active .ps-spinner { display: block; }
+        .popup-step.done .ps-spinner { display: none; }
+        .ps-status { font-size: 12px; font-weight: 600; color: #64748b; min-width: 70px; text-align: right; }
+        .popup-step.active .ps-status { color: #1a6b3e; }
+        .popup-step.done .ps-status { color: #22c55e; }
+
+        /* ═══════════════════════ RELOAD DIALOG ═══════════════════════ */
+        .reload-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            display: none; align-items: center; justify-content: center; z-index: 1001;
+        }
+        .reload-backdrop.show { display: flex; }
+        .reload-dialog {
+            background: white; padding: 24px; border-radius: 16px;
+            max-width: 400px; width: 90%; text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .reload-icon { font-size: 40px; margin-bottom: 12px; }
+        .reload-dialog h2 { margin: 0 0 8px; color: #1e293b; }
+        .reload-dialog p { margin: 0 0 20px; color: #475569; line-height: 1.5; }
+        .reload-btns { display: flex; gap: 12px; justify-content: center; }
+        .reload-btn-stay, .reload-btn-leave {
+            padding: 10px 20px; border: none; border-radius: 8px;
+            font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .reload-btn-stay { background: #e2e8f0; color: #334155; }
+        .reload-btn-stay:hover { background: #cbd5e1; }
+        .reload-btn-leave { background: #ef4444; color: white; }
+        .reload-btn-leave:hover { background: #dc2626; }
+
+        /* ═══════════════════════ PDF UPLOAD CARD ═══════════════════════ */
+        .card {
+            max-width: 520px; margin: 40px auto; padding: 24px;
+            background: white; border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .flag-icon { display: flex; gap: 2px; }
+        .flag-icon span { display: block; width: 8px; height: 24px; border-radius: 2px; }
+        .flag-icon .g { background: #078930; }
+        .flag-icon .y { background: #FCDD09; }
+        .flag-icon .r { background: #DA121A; }
+        .logo-row h1 { font-size: 20px; font-weight: 700; color: #1a6b3e; margin: 0; }
+        .national-id-logo { font-size: 24px; margin-left: auto; }
+        .subtitle { color: #475569; margin: 0 0 8px; }
+        .limit-note { color: #64748b; font-size: 13px; margin: 0 0 20px; }
+        
+        .error-box {
+            background: #fef2f2; border: 1px solid #fecaca;
+            color: #b91c1c; padding: 12px 16px; border-radius: 8px;
+            margin-bottom: 20px; font-size: 14px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #cbd5e1; border-radius: 12px;
+            padding: 32px 24px; text-align: center; cursor: pointer;
+            transition: all 0.2s; background: #f8fafc;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #2ecc71; background: #f0fdf4;
+        }
+        .upload-icon { font-size: 40px; margin-bottom: 12px; }
+        .upload-zone p { margin: 0 0 4px; font-weight: 600; color: #1e293b; }
+        .upload-zone small { color: #64748b; }
+        .upload-zone input { display: none; }
+        
+        .file-list { margin-top: 20px; display: none; }
+        .file-list-title { 
+            font-weight: 600; color: #1e293b; margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .file-count-badge {
+            background: #e2e8f0; padding: 2px 10px; border-radius: 12px;
+            font-size: 12px; font-weight: 600;
+        }
+        .file-count-badge.error-badge { background: #fecaca; color: #b91c1c; }
+        .file-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px; background: #f8fafc;
+            border-radius: 8px; margin-bottom: 8px; font-size: 13px;
+        }
+        .file-item .icon { font-size: 16px; }
+        
+        .btn {
+            width: 100%; padding: 14px; margin-top: 20px;
+            background: linear-gradient(135deg, #1a6b3e, #2ecc71);
+            color: white; border: none; border-radius: 10px;
+            font-weight: 700; font-size: 15px; cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn:disabled { background: #cbd5e1; cursor: not-allowed; transform: none; }
+        .btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(26,107,62,0.3); }
+    </style>
+</head>
+<body>
+    <!-- ═══════════════════════ POPUP BACKDROP ═══════════════════════ -->
+    <div class="popup-backdrop" id="popupBackdrop">
+        <div class="popup-card">
+            <div class="popup-header">
+                <div class="popup-rings">
+                    <div class="r pr1"></div>
+                    <div class="r pr2"></div>
+                    <div class="r pr3"></div>
+                    <div class="pr-center">📄</div>
+                </div>
+                <div class="popup-header-title">Processing ID Cards</div>
+                <div class="popup-header-sub" id="progressNote">Starting…</div>
+            </div>
+            <div class="popup-body">
+                <div style="text-align:center">
+                    <div class="popup-count-pill">
+                        <div class="count-dot"></div>
+                        <span id="popupFileCount">0 files</span>
+                    </div>
+                </div>
+                <div class="popup-bar-label">
+                    <span>Progress</span>
+                    <span id="popupPct">0%</span>
+                </div>
+                <div class="popup-bar-wrap">
+                    <div class="popup-bar-fill" id="popupBarFill"></div>
+                </div>
+                <div class="popup-steps">
+                    <div class="popup-step active" id="ps1">
+                        <div class="ps-icon">📖</div>
+                        <div class="ps-info">
+                            <div class="ps-title">Reading PDF files</div>
+                            <div class="ps-sub">Parsing document structure</div>
+                        </div>
+                        <div class="ps-spinner"></div>
+                        <div class="ps-status">In progress</div>
+                    </div>
+                    <div class="popup-step" id="ps2">
+                        <div class="ps-icon">🔍</div>
+                        <div class="ps-info">
+                            <div class="ps-title">Extracting ID data</div>
+                            <div class="ps-sub">OCR + field recognition</div>
+                        </div>
+                        <div class="ps-spinner"></div>
+                        <div class="ps-status">Waiting</div>
+                    </div>
+                    <div class="popup-step" id="ps3">
+                        <div class="ps-icon">🪪</div>
+                        <div class="ps-info">
+                            <div class="ps-title">Generating cards</div>
+                            <div class="ps-sub">Building ID card layout</div>
+                        </div>
+                        <div class="ps-spinner"></div>
+                        <div class="ps-status">Waiting</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════ RELOAD DIALOG ═══════════════════════ -->
+    <div class="reload-backdrop" id="reloadBackdrop">
+        <div class="reload-dialog">
+            <div class="reload-icon">⚠️</div>
+            <h2>Leave this page?</h2>
+            <p>
+                You have <strong id="dialogFileCount">files selected</strong>.<br>
+                Reloading will clear your selection and progress will be lost.
+            </p>
+            <div class="reload-btns">
+                <button class="reload-btn-stay" onclick="stayOnPage()">Stay on page</button>
+                <button class="reload-btn-leave" onclick="leavePage()">Leave anyway</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════ MAIN CARD ═══════════════════════ -->
+    <div class="card">
+        <div class="logo-row">
+            <div class="flag-icon">
+                <span class="g"></span><span class="y"></span><span class="r"></span>
+            </div>
+            <h1>Ethiopian Fayda ID</h1>
+            <div class="national-id-logo">🪪</div>
+        </div>
+        <p class="subtitle">Upload Ethiopian Digital ID PDFs to generate cards</p>
+        <p class="limit-note">📄 Upload up to 100 PDFs — all cards on one page</p>
+
+        {% if error %}
+        <div class="error-box">⚠️ {{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('multi') }}" enctype="multipart/form-data" id="uploadForm">
+            <div class="upload-zone" id="dropZone">
+                <div class="upload-icon">📄</div>
+                <p>Drop your Fayda PDFs here</p>
+                <small>or click to browse — select up to 100 files</small>
+                <input type="file" name="pdf" accept="application/pdf" id="fileInput" multiple>
+            </div>
+
+            <div class="file-list" id="fileList">
+                <div class="file-list-title">Selected files <span class="file-count-badge" id="fileCount">0</span></div>
+                <div id="fileItems"></div>
+            </div>
+
+            <button class="btn" type="submit" id="submitBtn" disabled>Generate ID Cards</button>
+        </form>
+
+        <div style="margin-top: 24px; border-top: 1px solid #eee; padding-top: 20px; text-align: center;">
+            <a href="/" style="color: #1a6b3e; text-decoration: none; font-size: 14px; font-weight: 600;">← Back to Image Processor</a>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('fileInput');
+        const btn = document.getElementById('submitBtn');
+        const fileList = document.getElementById('fileList');
+        const fileItems = document.getElementById('fileItems');
+        const fileCount = document.getElementById('fileCount');
+        const drop = document.getElementById('dropZone');
+        const MAX = 100;
+
+        let hasFiles = false;
+        let isSubmitting = false;
+        let pendingNav = null;
+
+        // ── File display ──────────────────────────────────────────
+        function updateFileDisplay(files) {
+            fileItems.innerHTML = '';
+            const count = Math.min(files.length, MAX);
+            const tooMany = files.length > MAX;
+
+            fileCount.textContent = count + (tooMany ? ` (max ${MAX})` : '');
+            fileCount.className = 'file-count-badge' + (tooMany ? ' error-badge' : '');
+
+            for (let i = 0; i < count; i++) {
+                const d = document.createElement('div');
+                d.className = 'file-item';
+                d.innerHTML = `<span class="icon">📄</span> ${files[i].name}`;
+                fileItems.appendChild(d);
+            }
+
+            fileList.style.display = 'block';
+            btn.disabled = count === 0;
+            hasFiles = count > 0;
+            if (count > 0) btn.textContent = `Generate ${count} ID Card${count > 1 ? 's' : ''}`;
+
+            document.getElementById('dialogFileCount').textContent =
+                `${count} file${count !== 1 ? 's' : ''} selected`;
+        }
+
+        input.addEventListener('change', () => {
+            if (input.files.length) updateFileDisplay(input.files);
+        });
+
+        drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+        drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+        drop.addEventListener('drop', e => {
+            e.preventDefault(); drop.classList.remove('dragover');
+            const transfer = new DataTransfer();
+            const limit = Math.min(e.dataTransfer.files.length, MAX);
+            for (let i = 0; i < limit; i++) transfer.items.add(e.dataTransfer.files[i]);
+            input.files = transfer.files;
+            updateFileDisplay(transfer.files);
+        });
+
+        // ── Submit: show popup ────────────────────────────────────
+        document.getElementById('uploadForm').addEventListener('submit', e => {
+            if (input.files.length > MAX) {
+                e.preventDefault();
+                alert(`Please select a maximum of ${MAX} PDF files.`);
+                return;
+            }
+
+            isSubmitting = true;
+            btn.textContent = 'Processing…';
+            btn.disabled = true;
+
+            const count = input.files.length;
+
+            // populate popup info
+            document.getElementById('popupFileCount').textContent =
+                `${count} file${count !== 1 ? 's' : ''}`;
+            document.getElementById('progressNote').textContent =
+                `Processing ${count} PDF${count > 1 ? 's' : ''}…`;
+
+            // show popup
+            document.getElementById('popupBackdrop').classList.add('active');
+
+            // restart bar animation
+            const bar = document.getElementById('popupBarFill');
+            bar.style.animation = 'none';
+            bar.offsetHeight;   // reflow
+            bar.style.animation = '';
+
+            // animate percentage counter
+            const pct = document.getElementById('popupPct');
+            const targets = [40, 70, 86, 92];
+            const delays = [400, 900, 1700, 2800];
+            delays.forEach((d, i) => {
+                setTimeout(() => { pct.textContent = targets[i] + '%'; }, d);
+            });
+
+            // animate steps
+            const steps = ['ps1', 'ps2', 'ps3'];
+            const labels = ['In progress', 'In progress', 'In progress'];
+
+            function activateStep(i) {
+                if (i > 0) {
+                    const prev = document.getElementById(steps[i - 1]);
+                    prev.classList.remove('active');
+                    prev.classList.add('done');
+                    prev.querySelector('.ps-status').textContent = '✓ Done';
+                }
+                const cur = document.getElementById(steps[i]);
+                cur.classList.add('active');
+                cur.querySelector('.ps-status').textContent = labels[i];
+            }
+
+            activateStep(0);
+            setTimeout(() => activateStep(1), 900);
+            setTimeout(() => activateStep(2), 1900);
+        });
+
+        // ── Reload guard ──────────────────────────────────────────
+        window.addEventListener('beforeunload', e => {
+            if (hasFiles && !isSubmitting) { e.preventDefault(); e.returnValue = ''; }
+        });
+
+        document.addEventListener('keydown', e => {
+            const isReload = e.key === 'F5' || (e.key === 'r' && (e.ctrlKey || e.metaKey));
+            if (isReload && hasFiles && !isSubmitting) {
+                e.preventDefault();
+                pendingNav = 'reload';
+                document.getElementById('reloadBackdrop').classList.add('show');
+            }
+        });
+
+        function stayOnPage() {
+            pendingNav = null;
+            document.getElementById('reloadBackdrop').classList.remove('show');
+        }
+
+        function leavePage() {
+            document.getElementById('reloadBackdrop').classList.remove('show');
+            isSubmitting = true;
+            if (pendingNav === 'reload') location.reload();
+            pendingNav = null;
+        }
+
+        document.getElementById('reloadBackdrop').addEventListener('click', e => {
+            if (e.target === e.currentTarget) stayOnPage();
+        });
+    </script>
+</body>
+</html>

@@ -86,3 +86,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 });
+const layoutRadios = document.querySelectorAll('input[name="layout"]');
+const cardsContainer = document.querySelector(".cards-container");
+
+function updateLayout() {
+    const selected = document.querySelector('input[name="layout"]:checked').value;
+
+    if (selected === "document") {
+        cardsContainer.classList.add("document-mode");
+    } else {
+        cardsContainer.classList.remove("document-mode");
+    }
+}
+
+layoutRadios.forEach(radio => {
+    radio.addEventListener("change", updateLayout);
+});
+
+// run when page loads
+updateLayout();

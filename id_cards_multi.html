@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;700&display=swap');
 
@@ -76,6 +76,8 @@ body{
   padding-right: 20px;
   align-items: center;
   justify-content: center;
+  background-color: #fff;
+  
 }
 
 .id-card.back .footer-text {
@@ -446,16 +448,16 @@ body.warm-mode .portrait-small img {
       <div class="info-panel">
         <div class="field" style="margin-bottom:6px;">
           <span class="label">ሙሉ ስም | Full Name</span>
-          <div class="val-am">{{ card.data.name_am }}</div>
-          <div class="val-en">{{ card.data.name_en }}</div>
+          <div class="val-am" contenteditable="true">{{ card.data.name_am }}</div>
+          <div class="val-en" contenteditable="true">{{ card.data.name_en }}</div>
         </div>
         <div class="field">
           <span class="label">የትውልድ ቀን | Date of Birth</span>
-          <div class="val-inline">{{ card.data.dob_eth }} | {{ card.data.dob_greg }}</div>
+          <div class="val-inline" contenteditable="true">{{ card.data.dob_eth }} | {{ card.data.dob_greg }}</div>
         </div>
         <div class="field">
           <span class="label">ፆታ | Sex</span>
-          <div class="val-inline">{{ card.data.sex_am }} | {{ card.data.sex_en }}</div>
+          <div class="val-inline" contenteditable="true">{{ card.data.sex_am }} | {{ card.data.sex_en }}</div>
         </div>
         <div class="field">
           <span class="label">የሚቆይበት ቀን | Date of Expiry</span><br>
@@ -471,7 +473,7 @@ body.warm-mode .portrait-small img {
           <span>ካርድ</span><span>ቁጥር</span><span>FAN</span>
         </div>
         <div class="barcode-box">
-          <span class="fan-number-top">{{ card.data.fcn }}</span>
+          <span class="fan-number-top" contenteditable="true">{{ card.data.fcn }}</span>
           <svg class="barcode-svg" id="barcodesvg_{{ loop.index0 }}" data-fcn="{{ card.data.fcn | replace(' ','') }}"></svg>
         </div>
       </div>
@@ -496,17 +498,17 @@ body.warm-mode .portrait-small img {
         <div class="left-side">
           <div class="field">
             <span class="label">ስልክ | Phone Number</span>
-            <div class="val-inline">{{ card.data.phone }}</div>
+            <div class="val-inline" contenteditable="true">{{ card.data.phone }}</div>
           </div>
           <div class="field">
             <span class="label">ዜግነት | Nationality<br>
               <span style="font-size:8px;color:#de9425;font-weight:normal;padding-left:15px;">(በተገለፀው መሰረት | Self Declared)</span>
             </span>
-            <div class="val-inline">{{ card.data.nat_am }} | {{ card.data.nat_en }}</div>
+            <div class="val-inline" contenteditable="true">{{ card.data.nat_am }} | {{ card.data.nat_en }}</div>
           </div>
           <div class="field">
             <span class="label">አድራሻ | Address</span>
-            <div class="val-inline">
+            <div class="val-inline" contenteditable="true">
               {{ card.data.reg_am }}<br>{{ card.data.reg_en }}<br>
               {{ card.data.zone_am }}<br>{{ card.data.zone_en }}<br>
               {{ card.data.woreda_am }}<br>{{ card.data.woreda_en }}

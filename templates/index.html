@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Processor </title>
+    <link rel="stylesheet" href="static/style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <main class="glass-container">
+        <header>
+            <div class="logo">
+                <span class="pulsing-dot"></span>
+                <h1> ID Processor</h1>
+            </div>
+            <p class="subtitle"> Ethiopian Digital ID Extraction</p>
+        </header>
+        <section class="upload-section">
+            <div class="layout-selector">
+                <label class="radio-tab">
+                    <input type="radio" name="layout" value="card">
+                    <span>Card View</span>
+                </label>
+                <label class="radio-tab">
+                    <input type="radio" name="layout" value="document" checked>
+                    <span>Official Document</span>
+                </label>
+                <a href="/pdf-processor" class="pdf-btn-nav" style="text-decoration: none;">
+                    <span style="font-size: 14px;">📄 PDF Processor</span>
+                </a>
+            </div>
+
+            <!-- Cards container -->
+            <div class="cards-container">
+                <!-- Repeat this block for each card -->
+                <!-- CARD 1 -->
+                <div class="card-group" id="card-1">
+                    <h3>📦 Card #1</h3>
+                    <div class="upload-grid">
+                        <div class="upload-card" id="drop-front-1">
+                            <input type="file" id="file-front-1" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🪪</div>
+                                <h4>Front Side</h4>
+                                <p>ID Front Image</p>
+                                <div class="preview" id="preview-front-1"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-back-1">
+                            <input type="file" id="file-back-1" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🔄</div>
+                                <h4>Back Side</h4>
+                                <p>ID Back Image</p>
+                                <div class="preview" id="preview-back-1"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-qr-1">
+                            <input type="file" id="file-qr-1" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">👤</div>
+                                <h4>Profile / QR</h4>
+                                <p>QR Screen or Image</p>
+                                <div class="preview" id="preview-qr-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD 2 -->
+                <div class="card-group" id="card-2">
+                    <h3>📦 Card #2</h3>
+                    <div class="upload-grid">
+                        <div class="upload-card" id="drop-front-2">
+                            <input type="file" id="file-front-2" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🪪</div>
+                                <h4>Front Side</h4>
+                                <p>ID Front Image</p>
+                                <div class="preview" id="preview-front-2"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-back-2">
+                            <input type="file" id="file-back-2" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🔄</div>
+                                <h4>Back Side</h4>
+                                <p>ID Back Image</p>
+                                <div class="preview" id="preview-back-2"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-qr-2">
+                            <input type="file" id="file-qr-2" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">👤</div>
+                                <h4>Profile / QR</h4>
+                                <p>QR Screen or Image</p>
+                                <div class="preview" id="preview-qr-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Repeat same for Card #3, #4, #5 -->
+                <div class="card-group" id="card-3">
+                    <h3>📦 Card #3</h3>
+                    <div class="upload-grid">
+                        <div class="upload-card" id="drop-front-3">
+                            <input type="file" id="file-front-3" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🪪</div>
+                                <h4>Front Side</h4>
+                                <p>ID Front Image</p>
+                                <div class="preview" id="preview-front-3"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-back-3">
+                            <input type="file" id="file-back-3" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🔄</div>
+                                <h4>Back Side</h4>
+                                <p>ID Back Image</p>
+                                <div class="preview" id="preview-back-3"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-qr-3">
+                            <input type="file" id="file-qr-3" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">👤</div>
+                                <h4>Profile / QR</h4>
+                                <p>QR Screen or Image</p>
+                                <div class="preview" id="preview-qr-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD 4 -->
+                <div class="card-group" id="card-4">
+                    <h3>📦 Card #4</h3>
+                    <div class="upload-grid">
+                        <div class="upload-card" id="drop-front-4">
+                            <input type="file" id="file-front-4" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🪪</div>
+                                <h4>Front Side</h4>
+                                <p>ID Front Image</p>
+                                <div class="preview" id="preview-front-4"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-back-4">
+                            <input type="file" id="file-back-4" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🔄</div>
+                                <h4>Back Side</h4>
+                                <p>ID Back Image</p>
+                                <div class="preview" id="preview-back-4"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-qr-4">
+                            <input type="file" id="file-qr-4" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">👤</div>
+                                <h4>Profile / QR</h4>
+                                <p>QR Screen or Image</p>
+                                <div class="preview" id="preview-qr-4"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD 5 -->
+                <div class="card-group" id="card-5">
+                    <h3>📦 Card #5</h3>
+                    <div class="upload-grid">
+                        <div class="upload-card" id="drop-front-5">
+                            <input type="file" id="file-front-5" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🪪</div>
+                                <h4>Front Side</h4>
+                                <p>ID Front Image</p>
+                                <div class="preview" id="preview-front-5"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-back-5">
+                            <input type="file" id="file-back-5" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">🔄</div>
+                                <h4>Back Side</h4>
+                                <p>ID Back Image</p>
+                                <div class="preview" id="preview-back-5"></div>
+                            </div>
+                        </div>
+                        <div class="upload-card" id="drop-qr-5">
+                            <input type="file" id="file-qr-5" accept="image/*" hidden>
+                            <div class="card-content">
+                                <div class="icon">👤</div>
+                                <h4>Profile / QR</h4>
+                                <p>QR Screen or Image</p>
+                                <div class="preview" id="preview-qr-5"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="process-btn" class="primary-btn" disabled>
+                <span>Process All IDs</span>
+                <div class="loader-ring"></div>
+            </button>
+        </section>
+
+        <script src="static/script.js"></script>
+</body>
+
+</html>

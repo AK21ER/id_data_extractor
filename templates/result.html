@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ethiopian Digital ID — {{ cards|length }} Card{{ 's' if cards|length > 1 else '' }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;700&display=swap');
+
+    :root {
+      --card-width: 500px;
+      --card-height: 310px;
+      --gold: #b08d57;
+      --bg-blue: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #ffffff;
+      font-family: 'Noto Sans Ethiopic', 'Nyala', 'Abyssinica SIL', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .card-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 105%;
+      object-fit: cover;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .id-card * {
+      z-index: 2;
+    }
+
+    .id-card.back .back-content,
+    .id-card.back .footer-text,
+    .id-card.back .sn-strip {
+      position: absolute;
+      z-index: 2;
+    }
+
+    .id-card.back .back-content {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      gap: 10px;
+      padding: 16px 14px 36px 14px;
+      box-sizing: border-box;
+    }
+
+    .id-card.back .left-side {
+      width: 50%;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .id-card.back .qr-section {
+      width: 50%;
+      display: flex;
+      padding-right: 20px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .id-card.back .footer-text {
+      bottom: 10px;
+      left: 16px;
+      font-size: 7px;
+      line-height: 1.3;
+      color: #444;
+    }
+
+    .id-card.back .sn-strip {
+      bottom: 15px;
+      right: 12px;
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      background-color: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* ── TOOLBAR ── */
+    .toolbar {
+      width: 100%;
+      max-width: calc(var(--card-width)*2 + 80px);
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .toolbar a,
+    .toolbar button {
+      padding: 8px 20px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      border: none;
+      transition: opacity .15s;
+    }
+
+    .toolbar a:hover,
+    .toolbar button:hover {
+      opacity: 0.85;
+    }
+
+    .btn-back {
+      background: #fff;
+      color: #333;
+    }
+
+    .btn-print {
+      background: #1a6b3e;
+      color: #fff;
+    }
+
+    .btn-word {
+      background: linear-gradient(135deg, #2b579a, #1e3f7a);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-pdf {
+      background: linear-gradient(135deg, #c0392b, #96281b);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toolbar-spacer {
+      flex: 1;
+    }
+
+    .card-counter {
+      font-size: 13px;
+      color: #fff;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    /* ── WARM TOGGLE ── */
+    .warm-toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      border: 1.5px solid #e0d8cc;
+      border-radius: 999px;
+      padding: 5px 14px 5px 10px;
+      cursor: pointer;
+      user-select: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .warm-toggle-wrap:hover {
+      border-color: #eca945;
+      box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.12);
+    }
+
+    .warm-icon {
+      font-size: 16px;
+      line-height: 1;
+      transition: transform .3s;
+    }
+
+    .warm-toggle-wrap.active .warm-icon {
+      transform: rotate(20deg) scale(1.15);
+    }
+
+    .toggle-pill {
+      width: 36px;
+      height: 20px;
+      background: #ddd;
+      border-radius: 10px;
+      position: relative;
+      transition: background .25s;
+      flex-shrink: 0;
+    }
+
+    .toggle-pill::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+      transition: left .25s, background .25s;
+    }
+
+    .warm-toggle-wrap.active .toggle-pill {
+      background: linear-gradient(135deg, #e8a838, #c97b1a);
+    }
+
+    .warm-toggle-wrap.active .toggle-pill::after {
+      left: 19px;
+    }
+
+    .warm-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #888;
+      transition: color .2s;
+      white-space: nowrap;
+    }
+
+    .warm-toggle-wrap.active .warm-label {
+      color: #b08d57;
+    }
+
+    /* ── ALL CARDS ── */
+    #allCards {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 0;
+    }
+
+    .cards-row {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      align-items: flex-start;
+      background: var(--bg-blue);
+      margin-bottom: 10px;
+    }
+
+    /* ── CARD BASE ── */
+    .id-card {
+      width: var(--card-width);
+      height: var(--card-height);
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background-color: transparent;
+      flex-shrink: 0;
+    }
+
+    .id-card::before {
+      display: none;
+    }
+
+    /* ── ISSUE DATE STRIP ── */
+    .issue-strip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 16px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 2;
+    }
+
+    .issue-half {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+
+    }
+
+    .issue-date {
+      font-size: 8px;
+      font-weight: 700;
+      color: #000;
+      writing-mode: horizontal-tb;
+      /* keep the date horizontal */
+      text-align: center;
+    }
+
+    .issue-label {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: #de9425;
+      white-space: nowrap;
+    }
+
+    /* Make only the Ethiopic label vertical */
+    .vertical-label {
+      writing-mode: vertical-rl;
+      /* vertical top-to-bottom */
+      transform: rotate(180deg);
+      /* flip to read naturally */
+      white-space: nowrap;
+    }
+
+    @media print {
+      .issue-strip {
+        width: 12px !important;
+      }
+
+      .issue-half {
+        width: 12px !important;
+        gap: 3px;
+        padding: 4px 0;
+      }
+
+      .issue-half img {
+        width: 15px !important;
+        height: 50px !important;
+      }
+
+      .issue-label {
+        font-size: 10px !important;
+      }
+
+      .issue-half+.issue-half {
+        border-top: 1px solid rgba(176, 141, 87, 0.3);
+      }
+    }
+
+    /* ── HEADER ── */
+    .header-section {
+      position: absolute;
+      top: 10px;
+      left: 15px;
+      right: 0;
+      width: auto;
+      z-index: 3;
+    }
+
+    .flag {
+      position: absolute;
+      top: 12px;
+      left: 18px;
+      width: 68px;
+      height: 35px;
+      background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Flag_of_Ethiopia.svg/3840px-Flag_of_Ethiopia.svg.png");
+      background-size: cover;
+      background-position: center;
+      border: 1px solid #888;
+    }
+
+    .national-id-logo {
+      position: absolute;
+      top: 15px;
+      right: 12px;
+    }
+
+    .header-amharic,
+    .header-english {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111;
+      text-align: center;
+      margin: 0;
+      line-height: 1.1;
+      letter-spacing: 2px;
+    }
+
+    /* ── PHOTO ── */
+    .portrait-main {
+      position: absolute;
+      top: 75px;
+      left: 22px;
+      width: 148px;
+      height: 200px;
+      overflow: hidden;
+    }
+
+    .portrait-main img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      transition: filter 0.4s ease;
+      opacity: 0.7;
+    }
+
+    body.warm-mode .portrait-main img,
+    body.warm-mode .portrait-small img {
+      filter: grayscale(95%) brightness(110%) contrast(90%) sepia(50%);
+    }
+
+    .info-panel {
+      position: absolute;
+      top: 70px;
+      left: 162px;
+      right: 10px;
+    }
+
+    .field {
+      margin: 0 0 4px 0;
+      line-height: 1.1;
+    }
+
+    .label {
+      color: #ff8945;
+      font-size: 10px;
+      font-weight: bold;
+      padding-left: 15px;
+    }
+
+    .val-am {
+      font-size: 13px;
+      font-weight: bold;
+      padding-left: 15px;
+      margin-bottom: 3px;
+    }
+
+    .val-en {
+      font-size: 12px;
+      font-weight: bold;
+      padding-left: 15px;
+      color: #222;
+    }
+
+    .val-inline {
+      font-size: 13px;
+      font-weight: bold;
+      padding-left: 15px;
+      margin-bottom: 2px;
+    }
+
+    .val-expiry {
+      font-size: 12px;
+      font-weight: bold;
+      padding-left: 15px;
+      color: #000000;
+      line-height: 1.3;
+    }
+
+    .barcode-section {
+      position: absolute;
+      bottom: 14px;
+      left: 180px;
+      display: flex;
+      align-items: center;
+    }
+
+    .fan-labels {
+      color: #ff8945;
+      display: flex;
+      flex-direction: column;
+      font-size: 10px;
+      font-weight: 800;
+      margin-right: 2px;
+    }
+
+    .barcode-box {
+      background: #fff;
+      padding: 2px 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .fan-number-top {
+      font-size: 13px;
+      font-weight: bold;
+      margin: 0;
+      line-height: 1;
+    }
+
+    .barcode-svg {
+      height: 34px;
+      display: block;
+    }
+
+    .portrait-small {
+      position: absolute;
+      bottom: 30px;
+      right: 35px;
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      background: transparent;
+    }
+
+    .portrait-small img {
+      width: 90%;
+      height: 110%;
+      object-fit: cover;
+      object-position: center top;
+      background: transparent;
+      overflow: hidden;
+      opacity: 0.6;
+      transition: filter 0.4s ease;
+    }
+
+    /* ── BACK ── */
+    .back-content {
+      padding: 16px 14px 36px 14px;
+      display: flex;
+      height: 100%;
+      box-sizing: border-box;
+      gap: 10px;
+    }
+
+    .left-side {
+      width: 50%;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .sn-strip {
+      position: absolute;
+      bottom: 15px;
+      right: 12px;
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      background-color: #ffffff;
+    }
+
+    .sn-label-txt {
+      font-size: 9px;
+      color: #b08d57;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .sn-number {
+      font-size: 10px;
+      color: #000;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+
+    .qr-section {
+      width: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .qr-img-wrap {
+      background: #fff;
+      border-radius: 5px;
+      padding: 1px;
+    }
+
+    .qr-img-wrap img {
+      width: 253px;
+      height: 253px;
+      display: block;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+
+    .footer-text {
+      position: absolute;
+      bottom: 13px;
+      left: 16px;
+      font-size: 5px;
+      line-height: 1.3;
+      color: #000000;
+    }
+
+    /* ── EXPORT OVERLAY ── */
+    .export-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .export-overlay.active {
+      display: flex;
+    }
+
+    .export-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 52px;
+      text-align: center;
+      box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+      min-width: 320px;
+    }
+
+    .export-spinner {
+      width: 52px;
+      height: 52px;
+      border: 5px solid #e0e0e0;
+      border-top-color: #2b579a;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 18px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .export-box h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a2e1a;
+      margin-bottom: 6px;
+    }
+
+    .export-box p {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .export-progress {
+      margin-top: 16px;
+      background: #f0f0f0;
+      border-radius: 10px;
+      height: 8px;
+      overflow: hidden;
+    }
+
+    .export-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #2b579a, #1e3f7a);
+      width: 0%;
+      transition: width .3s ease;
+      border-radius: 10px;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+
+      .toolbar {
+        display: none;
+      }
+
+      .id-card {
+        box-shadow: none;
+      }
+
+      .export-overlay {
+        display: none !important;
+      }
+    }
+
+    .issue-half {
+      display: flex;
+      align-items: center;
+      /* vertically centers the date and label */
+      gap: 10px;
+      /* spacing between date and label */
+    }
+
+    .vertical-text {
+      writing-mode: vertical-rl;
+      /* makes text vertical */
+      transform: rotate(180deg);
+      /* flip to read top-to-bottom */
+      white-space: nowrap;
+      /* keep in one line */
+      letter-spacing: 0.2px;
+      /* optional spacing */
+    }
+
+    .vertical-label {
+      writing-mode: vertical-rl;
+      /* vertical top-to-bottom */
+      transform: rotate(180deg);
+      /* flip so it reads naturally */
+      white-space: nowrap;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: #de9425;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="export-overlay" id="exportOverlay">
+    <div class="export-box">
+      <div class="export-spinner"></div>
+      <h3 id="exportTitle">Generating Document</h3>
+      <p id="exportStatus">Capturing cards…</p>
+      <div class="export-progress">
+        <div class="export-progress-bar" id="exportBar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <a class="btn-back" href="/">← Upload More</a>
+    <button class="btn-print" onclick="window.print()">🖨 Print</button>
+
+    <div class="warm-toggle-wrap" id="warmToggle" onclick="toggleWarm()" title="Toggle warm tone on photos">
+      <span class="warm-icon">☀️</span>
+      <div class="toggle-pill"></div>
+      <span class="warm-label">Brown Photo</span>
+    </div>
+
+    <span class="toolbar-spacer"></span>
+
+    <button class="btn-pdf" id="btnPdf" onclick="exportToPdf()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path
+          d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z" />
+      </svg>
+      Save as PDF
+    </button>
+
+    <button class="btn-word" id="btnWord" onclick="exportToWord()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path
+          d="M19.5 3h-15A1.5 1.5 0 003 4.5v15A1.5 1.5 0 004.5 21H12v-6.75h-2.25V12H12v-1.688c0-2.213 1.356-3.437 3.346-3.437.95 0 1.944.168 1.944.168v2.168h-1.095c-1.078 0-1.415.668-1.415 1.354V12h2.438l-.39 2.25H14.78V21h4.72a1.5 1.5 0 001.5-1.5v-15A1.5 1.5 0 0019.5 3z" />
+      </svg>
+      Save as Word
+    </button>
+    <span class="card-counter">{{ cards|length }} card{{ 's' if cards|length > 1 else '' }}</span>
+  </div>
+
+  <div id="allCards">
+    {% for card in cards %}
+    <div class="cards-row" id="card-row-{{ loop.index0 }}">
+
+      <!-- FRONT -->
+      <div class="id-card front">
+        <img class="card-bg" src="{{ url_for('static', filename='image/front_back.png') }}">
+
+        <style>
+          .vertical-label {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            letter-spacing: 0;
+            word-spacing: 0;
+            white-space: nowrap;
+          }
+        </style>
+
+        <div class="issue-strip">
+          <div class="issue-half">
+            <span class="issue-label vertical-label" style="color:#000" id="issue-greg"></span>
+            <span class="issue-label vertical-label">Date of Issue</span>
+          </div>
+
+          <div class="issue-half">
+            <span class="issue-label vertical-label" style="color:#000" id="issue-eth"></span>
+            <span class="issue-label vertical-label">የተሰጠበት ቀን</span>
+          </div>
+        </div>
+
+        <script>
+          // Get expiry dates from your template
+          let expiryGreg = "{{ card.data.expiry_greg or '—' }}"; // e.g., "2026-03-16"
+          let expiryEth = "{{ card.data.expiry_eth or '—' }}";   // e.g., "2018-07-08"
+
+          // ---- Gregorian Issue Date ----
+          let issueGreg = "—";
+          if (expiryGreg !== "—") {
+            let d = new Date(expiryGreg);
+            d.setFullYear(d.getFullYear() - 8); // Subtract 5 years
+            // Format back to YYYY-MM-DD
+            issueGreg = d.toISOString().split('T')[0];
+          }
+
+          document.getElementById("issue-greg").textContent = issueGreg;
+
+          // ---- Ethiopic Issue Date ----
+          // If your Ethiopic date is in "YYYY/MM/DD" or similar numeric format
+          let issueEth = "—";
+          if (expiryEth !== "—") {
+            let parts = expiryEth.split(/[-\/]/); // Split by - or /
+            if (parts.length === 3) {
+              let year = parseInt(parts[0], 10) - 8; // Subtract 5 years
+              issueEth = [year, parts[1], parts[2]].join("/"); // Keep month/day same
+            }
+          }
+
+          document.getElementById("issue-eth").textContent = issueEth;
+        </script>
+        <div class="portrait-main">
+          {% if card.photo %}
+          <img class="card-photo" src="{{ card.photo }}" data-orig="{{ card.photo }}" data-warm="{{ card.photo_warm }}"
+            alt="Photo">
+          {% endif %}
+        </div>
+
+        <div class="info-panel">
+          <div class="field" style="margin-bottom:8px;">
+            <span class="label">ሙሉ ስም | Full Name</span>
+            <div class="val-am" style="height: 48px; display: flex; align-items: flex-end; padding-left: 15px;">
+              {% if card.data.name_am_image %}
+              <img src="{{ card.data.name_am_image }}"
+                style="height: 100%; width: auto; max-width: 480px; object-fit: contain; filter: contrast(1.1);">
+              {% else %}
+              <div style="font-size: 24px; font-weight: 800; color: #000;">{{ card.data.name_am or '—' }}</div>
+              {% endif %}
+            </div>
+            <div class="val-en" style="font-size: 14px; font-weight: 700; color: #111; padding-left: 15px;">
+              {{ card.data.name_en or '—' }}
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">የትውልድ ቀን | Date of Birth</span>
+            <div class="val-inline">
+              {% if card.data.dob_eth and card.data.dob_greg %}
+              {{ card.data.dob_eth }} | {{ card.data.dob_greg }}
+              {% elif card.data.dob_eth %}
+              {{ card.data.dob_eth }} (EC) | —
+              {% elif card.data.dob_greg %}
+              — | {{ card.data.dob_greg }} (GC)
+              {% else %}
+              — | —
+              {% endif %}
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">ፆታ | Sex</span>
+            <div class="val-inline">{{ card.data.sex_am }} | {{ card.data.sex_en }}</div>
+          </div>
+          <div class="field">
+            <span class="label">የሚያበቃብት ቀን | Date of Expiry</span>
+            <div class="val-expiry">
+              {{ card.data.expiry_eth or '—' }} | {{ card.data.expiry_greg or '—' }}
+            </div>
+          </div>
+
+        </div>
+
+        <div class="barcode-section">
+          <div class="fan-labels">
+            <span>ካርድ</span><span>ቁጥር</span><span>FAN</span>
+          </div>
+          <div class="barcode-box">
+            <span class="fan-number-top">{{ card.data.fcn }}</span>
+            <svg class="barcode-svg" id="barcodesvg_{{ loop.index0 }}"
+              data-fcn="{% if card.data.barcode_data and card.data.barcode_data != '—' %}{{ card.data.barcode_data }}{% else %}{{ card.data.fcn | replace(' ','') }}{% endif %}"></svg>
+          </div>
+        </div>
+
+        <div class="portrait-small">
+          {% if card.photo %}
+          <img class="card-photo" src="{{ card.photo }}" data-orig="{{ card.photo }}" data-warm="{{ card.photo_warm }}"
+            alt="Photo small">
+          {% endif %}
+        </div>
+      </div><!-- /FRONT -->
+
+      <!-- BACK -->
+      <div class="id-card back">
+        <img class="card-bg" src="{{ url_for('static', filename='image/back.png') }}">
+        <div class="back-content">
+          <div class="left-side">
+            <div class="field">
+              <span class="label">ስልክ | Phone Number</span>
+              <div class="val-inline">{{ card.data.phone }}</div>
+            </div>
+            <div class="field">
+              <span class="label">ዜግነት | Nationality<br>
+                <span style="font-size:8px;color:#ffa53e;font-weight:normal;padding-left:15px;">(በተገለፀው መሰረት | Self
+                  Declared)</span>
+              </span>
+              <div class="val-inline">{{ card.data.nat_am }} | {{ card.data.nat_en }}</div>
+            </div>
+            <div class="field">
+              <span class="label">አድራሻ | Address</span>
+              <div class="val-inline">
+                {{ card.data.reg_am }}<br>{{ card.data.reg_en }}<br>
+                {{ card.data.zone_am }}<br>{{ card.data.zone_en }}<br>
+                {{ card.data.woreda_am }}<br>{{ card.data.woreda_en }}
+              </div>
+            </div>
+            <div
+              style="background-color: #ffffff; padding: 2px 4px; display: inline-flex; align-items: center; font-family: sans-serif; line-height: 1; border: 1px solid #ccc; width: fit-content; max-width: 150px;">
+
+              <div style="text-align: right; font-size: 7px; font-weight: bold; color: #000;">
+                ፋይዳ<br>ልዩ ቁጥር
+              </div>
+
+              <div style="height: 14px; width: 1px; background-color: #000; margin: 0 3px;"></div>
+
+              <div style="display: flex; align-items: baseline;">
+                <span style="font-size: 10px; color: #000; margin-right: 2px;">FIN</span>
+                <span style="font-size: 13px; font-weight: bold; color: #000; letter-spacing: 0.1px;">{{ card.data.fin
+                  }}</span>
+              </div>
+
+            </div>
+            <br>
+            <span style="display:inline-block;overflow:hidden;line-height:0;margin-top:-10px;">
+              <img src="{{ card.data.fin_image }}" style="height:20px;display:block;margin-right:5px;">
+            </span>
+          </div>
+          <div class="qr-section">
+            <div class="qr-img-wrap">
+              {% if card.qr %}
+              <img src="{{ card.qr }}" alt="QR Code">
+              {% else %}
+              <div
+                style="width:225px;height:225px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:11px;">
+                QR not found</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="footer-text">
+          ይህ መታወቂያ ጠፍቶ ካገኙ በአቅራቢያዎ ላለ ፖሊስ ጣቢያ ወይም ለተቋሙ ያስረክቡ::
+          ለተጨማሪ 9779 ላይ ይደዉሉ ወይም id.et/cardprint ይጎብኙ።<br>
+          If lost and found, please return to nearby police station or to the institution.
+          Call 9779 or visit id.et/cardprint for more.
+        </div>
+        <div class="sn-strip">
+          <span class="sn-label-txt">SN:</span>
+          <span class="sn-number" id="sn_{{ loop.index0 }}">—</span>
+        </div>
+      </div><!-- /BACK -->
+
+    </div><!-- /cards-row -->
+    {% endfor %}
+  </div><!-- /allCards -->
+
+  <script>
+    // Barcodes
+    document.querySelectorAll('.barcode-svg').forEach(svg => {
+      const fcn = svg.dataset.fcn;
+      if (fcn && fcn !== '—') {
+        try {
+          JsBarcode(svg, fcn, {
+            format: "CODE128", lineColor: "#000",
+            width: 1.3, height: 30, displayValue: false, margin: 0
+          });
+        } catch (e) {
+          console.warn('Barcode rendering failed for value:', fcn, e);
+        }
+      }
+    });
+
+    // SN numbers
+    document.querySelectorAll('[id^="sn_"]').forEach(el => {
+      el.textContent = Math.floor(10000000 + Math.random() * 90000000);
+    });
+
+    // Warm Photo Toggle
+    let warmOn = false;
+    function toggleWarm() {
+      warmOn = !warmOn;
+      const toggle = document.getElementById('warmToggle');
+      if (warmOn) {
+        document.body.classList.add('warm-mode');
+        toggle.classList.add('active');
+      } else {
+        document.body.classList.remove('warm-mode');
+        toggle.classList.remove('active');
+      }
+    }
+
+    // Overlay helpers
+    function showOverlay(title) {
+      document.getElementById('exportTitle').textContent = title;
+      document.getElementById('exportStatus').textContent = 'Capturing cards…';
+      document.getElementById('exportBar').style.width = '0%';
+      document.getElementById('exportOverlay').classList.add('active');
+    }
+    function hideOverlay() {
+      setTimeout(() => {
+        document.getElementById('exportOverlay').classList.remove('active');
+      }, 600);
+    }
+
+    // Export To PDF
+    async function exportToPdf() {
+      const btn = document.getElementById('btnPdf');
+      btn.disabled = true;
+      showOverlay('Generating PDF');
+
+      const status = document.getElementById('exportStatus');
+      const bar = document.getElementById('exportBar');
+
+      await document.fonts.ready;
+
+      const { jsPDF } = window.jspdf;
+
+      const CARD_W = 85.60;
+      const CARD_H = 53.98;
+      const PAGE_W = 210;
+      const PAGE_H = 297;
+      const GAP_X = 2.0;
+      const GAP_Y = 2.5;
+      const CARDS_PER_PAGE = 5;
+
+      const ROW_W = CARD_W * 2 + GAP_X;
+      const MARGIN_X = (PAGE_W - ROW_W) / 2;
+      const totalH = CARD_H * CARDS_PER_PAGE + GAP_Y * (CARDS_PER_PAGE - 1);
+      const MARGIN_Y = (PAGE_H - totalH) / 2;
+
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      const fronts = document.querySelectorAll('.id-card.front');
+      const backs = document.querySelectorAll('.id-card.back');
+      const total = fronts.length;
+
+      function applyWarmSrcs(on) {
+        document.querySelectorAll('.card-photo').forEach(img => {
+          img.src = on ? img.dataset.warm : img.dataset.orig;
+        });
+      }
+
+      applyWarmSrcs(warmOn);
+      await new Promise(r => setTimeout(r, 80));
+
+      for (let i = 0; i < total; i++) {
+        const posOnPage = i % CARDS_PER_PAGE;
+        if (i > 0 && posOnPage === 0) pdf.addPage();
+        const y = MARGIN_Y + posOnPage * (CARD_H + GAP_Y);
+
+        status.textContent = `Rendering card ${i + 1} of ${total}…`;
+        bar.style.width = (5 + 88 * (i + 0.5) / total) + '%';
+
+        function rotate180(src) {
+          const c = document.createElement('canvas');
+          c.width = src.width; c.height = src.height;
+          const x = c.getContext('2d');
+          x.translate(c.width, 0);
+          x.scale(-1, 1);
+          x.drawImage(src, 0, 0);
+          return c;
+        }
+
+        const fCanvas = rotate180(await html2canvas(fronts[i], {
+          scale: 4, useCORS: true, backgroundColor: '#ffffff'
+        }));
+        pdf.addImage(fCanvas.toDataURL('image/png'), 'PNG', MARGIN_X, y, CARD_W, CARD_H);
+
+        if (backs[i]) {
+          const bCanvas = rotate180(await html2canvas(backs[i], {
+            scale: 4, useCORS: true, backgroundColor: '#ffffff'
+          }));
+          pdf.addImage(bCanvas.toDataURL('image/png'), 'PNG',
+            MARGIN_X + CARD_W + GAP_X, y, CARD_W, CARD_H);
+        }
+
+        bar.style.width = (5 + 88 * (i + 1) / total) + '%';
+      }
+
+      applyWarmSrcs(false);
+
+      status.textContent = 'Saving PDF…';
+      bar.style.width = '98%';
+      pdf.save('ethiopian_id_cards.pdf');
+
+      bar.style.width = '100%';
+      btn.disabled = false;
+      hideOverlay();
+    }
+
+    // Export To Word
+    async function exportToWord() {
+      const btn = document.getElementById('btnWord');
+      btn.disabled = true;
+      showOverlay('Generating Word Document');
+
+      const status = document.getElementById('exportStatus');
+      const bar = document.getElementById('exportBar');
+
+      await document.fonts.ready;
+
+      const rows = document.querySelectorAll('.cards-row');
+      const images = [];
+      let progress = 0;
+
+      for (const row of rows) {
+        status.textContent = "Rendering cards...";
+        const canvas = await html2canvas(row, {
+          scale: 3, useCORS: true, backgroundColor: "#ffffff"
+        });
+        images.push(canvas.toDataURL("image/png"));
+        progress += 60 / rows.length;
+        bar.style.width = progress + "%";
+      }
+
+      status.textContent = "Building Word document...";
+      const resp = await fetch("/generate-word", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: images })
+      });
+
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ethiopian_id_cards.docx";
+      a.click();
+      URL.revokeObjectURL(url);
+
+      bar.style.width = "100%";
+      btn.disabled = false;
+      hideOverlay();
+    }
+  </script>
+
+</body>
+
+</html>
